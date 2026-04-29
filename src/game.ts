@@ -402,9 +402,8 @@ const pushLog = (logs: LogEntry[], msg: string): LogEntry[] => {
 
 // === Derived values ===
 export const spinGain = (s: State) =>
-  SPIN_GAIN_BASE +
-  s.spinYieldLevel * SPIN_YIELD_INC +
-  s.researchSpinYieldLevel * 0.05;
+  (SPIN_GAIN_BASE + s.spinYieldLevel * SPIN_YIELD_INC) *
+  (1 + s.researchSpinYieldLevel * 0.15);
 
 export const faucetMultiplier = (s: State) =>
   1 + s.faucetMultLevel * FAUCET_MULT_INC;
@@ -673,11 +672,11 @@ export function reducer(s: State, a: Action): State {
         if (!sl.crop) return acc;
         return acc + (CROPS[sl.crop].heatPerSec ?? HEAT_PER_PLANT_SEC);
       }, 0);
-      const researchVentBoost = s.researchHeatVentLevel * 0.15;
+      const researchVentMult = 1 + s.researchHeatVentLevel * 0.15;
       const ventEffect = s.thermostatBought
-        ? // thermostat auto-tunes vents to keep heat near 60 — additive cooling
-          (HEAT_DECAY_BASE + (s.ventsLevel + 2) * VENT_RATE_PER_LEVEL + researchVentBoost)
-        : HEAT_DECAY_BASE + s.ventsLevel * VENT_RATE_PER_LEVEL + researchVentBoost;
+        ? // thermostat auto-tunes vents to keep heat near 60
+          (HEAT_DECAY_BASE + (s.ventsLevel + 2) * VENT_RATE_PER_LEVEL) * researchVentMult
+        : (HEAT_DECAY_BASE + s.ventsLevel * VENT_RATE_PER_LEVEL) * researchVentMult;
       heat = Math.max(0, heat + (heatGen - ventEffect) * dt);
       // Soft cap visual at 110 to leave room for wither indicator
       heat = Math.min(110, heat);
@@ -1683,7 +1682,7 @@ export const upgrades: Upgrade[] = [
     id: "r_spinYield",
     name: "Wheel Linkage",
     desc: (s) =>
-      `+0.05 water per spin (currently ${fmt(spinGain(s), 2)})`,
+      `spin gain ×${fmt(1 + s.researchSpinYieldLevel * 0.15, 2)} → ×${fmt(1 + (s.researchSpinYieldLevel + 1) * 0.15, 2)} (currently +${fmt(spinGain(s), 2)} water/spin)`,
     cost: (s) => ({ research: researchCost(2, 2.0, s.researchSpinYieldLevel) }),
     effect: (s) => ({ researchSpinYieldLevel: s.researchSpinYieldLevel + 1 }),
     visible: (s) => s.stage >= 1,
@@ -1697,7 +1696,8 @@ export const upgrades: Upgrade[] = [
   {
     id: "r_heatVent",
     name: "Convective Modeling",
-    desc: () => `+0.15 heat/s extra cooling beyond vents`,
+    desc: (s) =>
+      `vent cooling ×${fmt(1 + s.researchHeatVentLevel * 0.15, 2)} → ×${fmt(1 + (s.researchHeatVentLevel + 1) * 0.15, 2)}`,
     cost: (s) => ({ research: researchCost(4, 1.9, s.researchHeatVentLevel) }),
     effect: (s) => ({ researchHeatVentLevel: s.researchHeatVentLevel + 1 }),
     visible: (s) => s.stage >= 2,

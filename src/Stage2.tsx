@@ -3,6 +3,7 @@ import type { Action, CropType, Slot, State } from "./game";
 import {
   autoSpinBaselineDegPerSec,
   CROPS,
+  cropGrowTime,
   effectiveFaucet,
   fmt,
   HEAT_GROWTH_THRESHOLD,
@@ -186,6 +187,7 @@ function GreenhousePanel({ state, dispatch }: Props) {
               idx={i}
               selected={selectedCrop}
               waterAvail={state.water}
+              state={state}
               dispatch={dispatch}
             />
           ))}
@@ -210,12 +212,14 @@ function SlotCell({
   idx,
   selected,
   waterAvail,
+  state,
   dispatch,
 }: {
   slot: Slot;
   idx: number;
   selected: CropType;
   waterAvail: number;
+  state: State;
   dispatch: React.Dispatch<Action>;
 }) {
   const def = slot.crop ? CROPS[slot.crop] : null;
@@ -227,7 +231,7 @@ function SlotCell({
       ? "READY"
       : def!.growTime === 0
         ? "PRODUCING"
-        : `${fmt(def!.growTime * (1 - slot.progress), 1)}s`;
+        : `${fmt(cropGrowTime(state, slot.crop!) * (1 - slot.progress), 1)}s`;
 
   return (
     <div className="flex flex-col gap-1.5 rounded-sm border border-border bg-bg/50 p-2">
