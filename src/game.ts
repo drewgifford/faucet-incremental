@@ -186,7 +186,7 @@ export const HEAT_GROWTH_THRESHOLD = 75; // > this halves growth speed
 export const HEAT_WITHER_THRESHOLD = 100; // crop withers at >= this
 
 // Stage 3 — Aqueducts.
-export const AQUEDUCT_AMP = 0.10; // each aqueduct: ×(1 + 0.10 × integrity)
+export const AQUEDUCT_AMP = 0.06; // each aqueduct: ×(1 + 0.06 × integrity) — tuned for late-game ceiling
 export const AQUEDUCT_DECAY_BASE = 0.008; // integrity lost / sec
 export const PRESSURE_BASE_MAX = 100;
 export const PRESSURE_CAP_PER_LEVEL = 50;
@@ -199,8 +199,8 @@ export const PRESSURE_BURST_MULT_VALVE = 2.5;
 export const BASE_POP_CAP = 10;
 export const POP_CAP_PER_LEVEL = 5;
 export const POP_GROWTH_RATE = 0.4; // per sec, modulated by gap and surplus
-export const POP_WATER_NEED = 0.04; // per pop per sec
-export const POP_FOOD_NEED = 0.02;
+export const POP_WATER_NEED = 0.15; // per pop per sec — settlement size now matters for water budget
+export const POP_FOOD_NEED = 0.05;
 export const POP_DECAY_RATE = 0.6; // pop lost / sec when starving
 export const LABOR_PER_POP = 1;
 export const SCHOOL_LABOR_MULT = 2;
@@ -209,11 +209,11 @@ export const FOOD_CAP_PER_GRANARY = 30;
 // Per-crop food yields live on each CROPS entry's `foodPerSec` field. No global default.
 
 // Stage 5 — Industry.
-export const BOILER_WATER_PER_SEC = 0.5;
-export const BOILER_COAL_PER_SEC = 0.05;
-export const BOILER_STEAM_OUT_PER_SEC = 1.0;
-export const TURBINE_MULT_PER = 0.05;
-export const POLLUTION_PER_BOILER = 0.4; // per sec when burning coal
+export const BOILER_WATER_PER_SEC = 8.0;
+export const BOILER_COAL_PER_SEC = 0.4;
+export const BOILER_STEAM_OUT_PER_SEC = 6.0;
+export const TURBINE_MULT_PER = 0.025;
+export const POLLUTION_PER_BOILER = 1.5; // per sec when burning coal
 export const POLLUTION_DECAY = 0.15; // per sec
 export const POLLUTION_MAX = 100;
 export const POLLUTION_RATE_PENALTY_MAX = 0.5; // worst-case rate cut (×0.5)
@@ -230,12 +230,12 @@ export const CAVE_IN_REF_DEPTH = 1000; // baseline depth for cave-in math
 export const CAVE_IN_BASE_PROB = 0.0009; // per sec at ref depth, 0 supports
 export const CAVE_IN_LOSS = 0.12;
 export const SALT_PER_MINERAL = 10;
-export const GEOTHERMAL_BONUS = 0.5; // +50% all rates when active
+export const GEOTHERMAL_BONUS = 0.30; // +30% all rates when active
 
 // Stage 7 — Atmosphere.
-export const SEEDER_WATER_PER_SEC = 0.3;
-export const SEEDER_STEAM_PER_SEC = 0.1;
-export const SEEDER_VAPOR_PER_SEC = 0.4;
+export const SEEDER_WATER_PER_SEC = 5.0;
+export const SEEDER_STEAM_PER_SEC = 1.0;
+export const SEEDER_VAPOR_PER_SEC = 2.5;
 export const VAPOR_PER_CLOUD = 50;
 export const CLOUD_FAUCET_BONUS = 0.06; // each cloud → +0.06 u/s base
 export const LIGHTNING_BASE_RATE = 0.001; // per cloud per sec
@@ -243,8 +243,8 @@ export const LIGHTNING_CAP_MULT = 3; // capacitor multiplier
 
 // Stage 8 — Hydrosphere.
 export const HYDROENTROPY_RATE = 0.05; // hydroentropy per (effective u/s) per sec
-export const HYDROENTROPY_TARGET = 1e6; // ascension unlock threshold
-export const CYCLE_MULT_INC = 0.5; // each cycle ascension adds +50% to all rates
+export const HYDROENTROPY_TARGET = 5e7; // ascension unlock threshold
+export const CYCLE_MULT_INC = 0.25; // each cycle ascension adds +25% to all rates
 
 // === Research ===
 // Base passive RP/sec by stage (index = stage). 0 at S0; ramps with progression.
@@ -562,13 +562,23 @@ export const yieldMultiplier = (s: State) =>
 
 export const bambooGrowTime = (s: State) =>
   BAMBOO_GROW_BASE / growthMultiplier(s);
+
+// Permanent faucetRate gains face diminishing returns: as the rate grows
+// the marginal harvest contribution shrinks. Keeps early-game snappy and
+// flattens the runaway late-game tail without arbitrary caps.
+export const permanentRateGain = (s: State, base: number): number =>
+  base / Math.sqrt(1 + s.faucetRate / 20);
+
 export const bambooYield = (s: State) =>
-  BAMBOO_BASE_YIELD * yieldMultiplier(s);
+  permanentRateGain(s, BAMBOO_BASE_YIELD * yieldMultiplier(s));
 
 export const cropGrowTime = (s: State, crop: CropType): number =>
   CROPS[crop].growTime / growthMultiplier(s);
 export const cropHarvestRate = (s: State, crop: CropType): number =>
-  (CROPS[crop].harvestFaucetRate ?? 0) * yieldMultiplier(s);
+  permanentRateGain(
+    s,
+    (CROPS[crop].harvestFaucetRate ?? 0) * yieldMultiplier(s),
+  );
 
 // === Costs ===
 export const capIncrement = (cap: number) =>
@@ -1473,8 +1483,8 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+1 aqueduct — each amplifies passive flow by ×${(1 + AQUEDUCT_AMP).toFixed(2)} when intact (currently ${s.aqueducts})`,
     cost: (s) => ({
-      water: Math.ceil(150 * Math.pow(1.55, s.aqueducts)),
-      salt: Math.ceil(20 * Math.pow(1.4, s.aqueducts)),
+      water: Math.ceil(150 * Math.pow(1.7, s.aqueducts)),
+      salt: Math.ceil(20 * Math.pow(1.45, s.aqueducts)),
     }),
     effect: (s) => ({
       aqueducts: s.aqueducts + 1,
@@ -1482,8 +1492,8 @@ export const upgrades: Upgrade[] = [
     }),
     visible: (s) => s.stage >= 3,
     available: (s) =>
-      s.water >= Math.ceil(150 * Math.pow(1.55, s.aqueducts)) &&
-      s.salt >= Math.ceil(20 * Math.pow(1.4, s.aqueducts)),
+      s.water >= Math.ceil(150 * Math.pow(1.7, s.aqueducts)) &&
+      s.salt >= Math.ceil(20 * Math.pow(1.45, s.aqueducts)),
     level: (s) => s.aqueducts,
     group: "aqueduct",
   },
@@ -1588,14 +1598,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+1 boiler — converts ${BOILER_WATER_PER_SEC} water/s + ${BOILER_COAL_PER_SEC} coal/s into ${BOILER_STEAM_OUT_PER_SEC} steam/s (currently ${s.boilers})`,
     cost: (s) => ({
-      water: Math.ceil(200 * Math.pow(1.6, s.boilers)),
-      labor: Math.ceil(50 * Math.pow(1.5, s.boilers)),
+      water: Math.ceil(400 * Math.pow(1.7, s.boilers)),
+      labor: Math.ceil(100 * Math.pow(1.55, s.boilers)),
     }),
     effect: (s) => ({ boilers: s.boilers + 1 }),
     visible: (s) => s.stage >= 5,
     available: (s) =>
-      s.water >= Math.ceil(200 * Math.pow(1.6, s.boilers)) &&
-      s.labor >= Math.ceil(50 * Math.pow(1.5, s.boilers)),
+      s.water >= Math.ceil(400 * Math.pow(1.7, s.boilers)) &&
+      s.labor >= Math.ceil(100 * Math.pow(1.55, s.boilers)),
     level: (s) => s.boilers,
     group: "industry",
   },
@@ -1685,13 +1695,13 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+1 station — converts ${SEEDER_WATER_PER_SEC} water/s + ${SEEDER_STEAM_PER_SEC} steam/s into ${SEEDER_VAPOR_PER_SEC} vapor/s (currently ${s.cloudSeeders})`,
     cost: (s) => ({
-      water: Math.ceil(800 * Math.pow(1.6, s.cloudSeeders)),
+      water: Math.ceil(2000 * Math.pow(1.75, s.cloudSeeders)),
       minerals: Math.ceil(20 + s.cloudSeeders * 12),
     }),
     effect: (s) => ({ cloudSeeders: s.cloudSeeders + 1 }),
     visible: (s) => s.stage >= 7,
     available: (s) =>
-      s.water >= Math.ceil(800 * Math.pow(1.6, s.cloudSeeders)) &&
+      s.water >= Math.ceil(2000 * Math.pow(1.75, s.cloudSeeders)) &&
       s.minerals >= 20 + s.cloudSeeders * 12,
     level: (s) => s.cloudSeeders,
     group: "atmosphere",
@@ -2021,7 +2031,7 @@ export const upgrades: Upgrade[] = [
     id: "stage2",
     name: "Construct Greenhouse → Stage II",
     desc: () => "transplant bamboo plots into climate-controlled greenhouse slots",
-    cost: () => ({ water: 80, seeds: 25 }),
+    cost: () => ({ water: 300, seeds: 60 }),
     effect: (s) => {
       // Carry over every planted bamboo plot as a greenhouse bamboo slot
       // (preserve growth progress and ready flag). Empty plots are discarded.
@@ -2045,9 +2055,9 @@ export const upgrades: Upgrade[] = [
       };
     },
     visible: (s) =>
-      s.stage === 1 && s.bambooHarvested >= 25 && s.plots.length >= 3,
+      s.stage === 1 && s.bambooHarvested >= 50 && s.plots.length >= 3,
     available: (s) =>
-      s.stage === 1 && s.water >= 80 && s.seeds >= 25,
+      s.stage === 1 && s.water >= 300 && s.seeds >= 60,
     done: (s) => s.stage2Unlocked,
     group: "milestone",
   },
@@ -2056,14 +2066,14 @@ export const upgrades: Upgrade[] = [
     name: "Lay Aqueducts → Stage III",
     desc: () =>
       "scale operations from greenhouse plots to a flowing infrastructure network",
-    cost: () => ({ water: 400, salt: 60 }),
+    cost: () => ({ water: 3000, salt: 250 }),
     effect: () => ({
       stage: 3 as Stage,
       stage3Unlocked: true,
     }),
     visible: (s) =>
-      s.stage === 2 && s.greenhouses >= 2 && effectiveFaucet(s) >= 1.0,
-    available: (s) => s.stage === 2 && s.water >= 400 && s.salt >= 60,
+      s.stage === 2 && s.greenhouses >= 3 && effectiveFaucet(s) >= 4.0,
+    available: (s) => s.stage === 2 && s.water >= 3000 && s.salt >= 250,
     done: (s) => s.stage3Unlocked,
     group: "milestone",
   },
@@ -2072,7 +2082,7 @@ export const upgrades: Upgrade[] = [
     name: "Found Settlement → Stage IV",
     desc: () =>
       "people arrive, drink your water, and offer their labor in return",
-    cost: () => ({ water: 1000, salt: 150 }),
+    cost: () => ({ water: 15000, salt: 800 }),
     effect: () => ({
       stage: 4 as Stage,
       stage4Unlocked: true,
@@ -2080,8 +2090,8 @@ export const upgrades: Upgrade[] = [
       food: BASE_FOOD_CAP / 2,
     }),
     visible: (s) =>
-      s.stage === 3 && s.aqueducts >= 4 && effectiveFaucet(s) >= 3.0,
-    available: (s) => s.stage === 3 && s.water >= 1000 && s.salt >= 150,
+      s.stage === 3 && s.aqueducts >= 8 && effectiveFaucet(s) >= 12.0,
+    available: (s) => s.stage === 3 && s.water >= 15000 && s.salt >= 800,
     done: (s) => s.stage4Unlocked,
     group: "milestone",
   },
@@ -2090,16 +2100,16 @@ export const upgrades: Upgrade[] = [
     name: "Light the Boilers → Stage V",
     desc: () =>
       "the steam age — water becomes power, coal becomes pollution",
-    cost: () => ({ water: 2500, labor: 800 }),
+    cost: () => ({ water: 50000, labor: 5000 }),
     effect: () => ({
       stage: 5 as Stage,
       stage5Unlocked: true,
       coal: 5, // starter ration
     }),
     visible: (s) =>
-      s.stage === 4 && s.population >= 25 && s.labor >= 200,
+      s.stage === 4 && s.population >= 60 && s.labor >= 2000,
     available: (s) =>
-      s.stage === 4 && s.water >= 2500 && s.labor >= 800,
+      s.stage === 4 && s.water >= 50000 && s.labor >= 5000,
     done: (s) => s.stage5Unlocked,
     group: "milestone",
   },
@@ -2108,16 +2118,16 @@ export const upgrades: Upgrade[] = [
     name: "Sink Borehole → Stage VI",
     desc: () =>
       "drill into the earth and tap the aquifer's vast water reserves",
-    cost: () => ({ water: 5000, steam: 80 }),
+    cost: () => ({ water: 250000, steam: 1500 }),
     effect: () => ({
       stage: 6 as Stage,
       stage6Unlocked: true,
       drilling: true, // start drilling immediately
     }),
     visible: (s) =>
-      s.stage === 5 && s.boilers >= 3 && s.steam >= 50,
+      s.stage === 5 && s.boilers >= 8 && s.steam >= 800,
     available: (s) =>
-      s.stage === 5 && s.water >= 5000 && s.steam >= 80,
+      s.stage === 5 && s.water >= 250000 && s.steam >= 1500,
     done: (s) => s.stage6Unlocked,
     group: "milestone",
   },
@@ -2126,16 +2136,16 @@ export const upgrades: Upgrade[] = [
     name: "Pierce the Sky → Stage VII",
     desc: () =>
       "pump water upward and seize control of the weather above your works",
-    cost: () => ({ minerals: 50, steam: 200 }),
+    cost: () => ({ minerals: 800, steam: 5000 }),
     effect: () => ({
       stage: 7 as Stage,
       stage7Unlocked: true,
       cloudSeeders: 1,
     }),
     visible: (s) =>
-      s.stage === 6 && s.depth >= AQUIFER_DEPTH + 200 && s.minerals >= 30,
+      s.stage === 6 && s.depth >= AQUIFER_DEPTH + 500 && s.minerals >= 400,
     available: (s) =>
-      s.stage === 6 && s.minerals >= 50 && s.steam >= 200,
+      s.stage === 6 && s.minerals >= 800 && s.steam >= 5000,
     done: (s) => s.stage7Unlocked,
     group: "milestone",
   },
@@ -2144,15 +2154,15 @@ export const upgrades: Upgrade[] = [
     name: "Inhabit the Hydrosphere → Stage VIII",
     desc: () =>
       "ascend beyond infrastructure — become the planetary water cycle",
-    cost: () => ({ minerals: 500, lightning: 30 }),
+    cost: () => ({ minerals: 8000, lightning: 250 }),
     effect: () => ({
       stage: 8 as Stage,
       stage8Unlocked: true,
     }),
     visible: (s) =>
-      s.stage === 7 && s.clouds >= 20 && s.lightning >= 15,
+      s.stage === 7 && s.clouds >= 80 && s.lightning >= 200,
     available: (s) =>
-      s.stage === 7 && s.minerals >= 500 && s.lightning >= 30,
+      s.stage === 7 && s.minerals >= 8000 && s.lightning >= 250,
     done: (s) => s.stage8Unlocked,
     group: "milestone",
   },
