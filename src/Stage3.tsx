@@ -73,24 +73,6 @@ export function Stage3({ state, dispatch }: Props) {
         <UpgradeList
           state={state}
           dispatch={dispatch}
-          groups={["greenhouse"]}
-          title="Greenhouse Tech"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["bamboo"]}
-          title="Cultivation"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["storage", "manual", "automation"]}
-          title="Workshop"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
           groups={["research"]}
           title="Research"
         />

@@ -1,6 +1,7 @@
 import type { Action, State } from "./game";
 import {
   autoSpinBaselineDegPerSec,
+  CROPS,
   effectiveFaucet,
   fmt,
   foodCap,
@@ -78,24 +79,6 @@ export function Stage4({ state, dispatch }: Props) {
         <UpgradeList
           state={state}
           dispatch={dispatch}
-          groups={["aqueduct"]}
-          title="Infrastructure"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["greenhouse", "bamboo"]}
-          title="Cultivation"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["storage", "manual", "automation"]}
-          title="Workshop"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
           groups={["research"]}
           title="Research"
         />
@@ -117,6 +100,12 @@ function SettlementPanel({ state }: { state: State }) {
   const foodPct = (state.food / foodCap(state)) * 100;
   const waterDemand = state.population * POP_WATER_NEED;
   const foodDemand = state.population * POP_FOOD_NEED;
+  const plantedSlots = state.ghSlots.filter((s) => s.crop);
+  const foodGen = plantedSlots.reduce(
+    (acc, sl) => acc + (sl.crop ? CROPS[sl.crop].foodPerSec ?? 0 : 0),
+    0,
+  );
+  const foodNet = foodGen - foodDemand;
   const starving = state.food < foodDemand || state.water < waterDemand;
   return (
     <Panel title="Settlement">
@@ -143,18 +132,38 @@ function SettlementPanel({ state }: { state: State }) {
             <div className="bar-fill" style={{ width: `${foodPct}%` }} />
           </div>
         </div>
-        <div className="flex flex-col gap-0.5 text-xs text-text-dim">
-          <div>
-            consumes {fmt(waterDemand, 2)} water/s + {fmt(foodDemand, 2)} food/s
+        <div className="flex flex-col gap-1 rounded-sm border border-border bg-bg/40 p-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="label">food source</span>
+            <span className="readout-dim tabular-nums">
+              {plantedSlots.length} slot{plantedSlots.length === 1 ? "" : "s"}{" "}
+              → +{fmt(foodGen, 3)} food/s
+            </span>
           </div>
-          <div>
-            food source: planted greenhouse slots (
-            {state.ghSlots.filter((s) => s.crop).length})
+          <div className="text-text-dim">
+            Each crop produces a different food rate (Potato is the food
+            specialist at +0.10/s). Plant on the Stage II tab.
+          </div>
+          <div className="flex items-center justify-between border-t border-border pt-1">
+            <span className="label">net food</span>
+            <span
+              className={`readout text-sm tabular-nums ${foodNet < 0 ? "text-bad" : foodNet === 0 ? "text-warn" : "text-emerald"}`}
+            >
+              {foodNet >= 0 ? "+" : ""}
+              {fmt(foodNet, 3)} /s
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="label">consumption</span>
+            <span className="readout-dim tabular-nums">
+              {fmt(waterDemand, 2)} water/s · {fmt(foodDemand, 3)} food/s
+            </span>
           </div>
         </div>
         {starving && state.population > 0 && (
           <div className="text-bad font-stencil text-[10px] tracking-widest uppercase">
-            ⚠ population is starving — provide more water or food
+            ⚠ population is starving — plant more greenhouse slots or supply
+            water
           </div>
         )}
       </div>

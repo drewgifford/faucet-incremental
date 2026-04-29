@@ -79,36 +79,6 @@ export function Stage7({ state, dispatch }: Props) {
         <UpgradeList
           state={state}
           dispatch={dispatch}
-          groups={["aquifer"]}
-          title="Drilling"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["industry"]}
-          title="Industry"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["aqueduct"]}
-          title="Infrastructure"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["greenhouse", "bamboo", "settlement"]}
-          title="Cultivation & Settlement"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["storage", "manual", "automation"]}
-          title="Workshop"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
           groups={["research"]}
           title="Research"
         />

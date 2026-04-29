@@ -66,18 +66,6 @@ export function Stage2({ state, dispatch }: Props) {
         <UpgradeList
           state={state}
           dispatch={dispatch}
-          groups={["bamboo"]}
-          title="Cultivation"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
-          groups={["storage", "manual", "automation"]}
-          title="Workshop"
-        />
-        <UpgradeList
-          state={state}
-          dispatch={dispatch}
           groups={["research"]}
           title="Research"
         />
@@ -202,6 +190,26 @@ function GreenhousePanel({ state, dispatch }: Props) {
             Harvest All ({readyCount})
           </button>
         </div>
+
+        {state.stage >= 4 && (
+          <div className="rounded-sm border border-emerald/40 bg-emerald/10 p-2 text-xs">
+            <div className="font-stencil text-[10px] tracking-widest text-emerald uppercase">
+              ◆ feeding settlement
+            </div>
+            <div className="mt-0.5 text-text-dim">
+              +
+              {fmt(
+                state.ghSlots.reduce(
+                  (acc, sl) =>
+                    acc + (sl.crop ? CROPS[sl.crop].foodPerSec ?? 0 : 0),
+                  0,
+                ),
+                3,
+              )}{" "}
+              food/s · plant Potato cultivar for high-yield food
+            </div>
+          </div>
+        )}
       </div>
     </Panel>
   );
@@ -301,9 +309,11 @@ function SlotCell({
 
 function cropDescription(def: import("./game").CropDef): string {
   const parts: string[] = [`plant: ${def.plantCost}w`];
+  if (def.growCost) parts.push(`upkeep: ${def.growCost} w/s`);
   if (def.growTime > 0) parts.push(`grow: ${def.growTime}s`);
   if (def.passiveWater) parts.push(`+${def.passiveWater} u/s passive`);
   if (def.passiveSalt) parts.push(`+${def.passiveSalt} salt/s passive`);
+  if (def.foodPerSec) parts.push(`+${def.foodPerSec} food/s`);
   if (def.harvestFaucetRate)
     parts.push(`harvest: +${def.harvestFaucetRate} u/s`);
   if (def.harvestSeeds) parts.push(`+${def.harvestSeeds} seeds`);

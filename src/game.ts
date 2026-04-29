@@ -7,7 +7,13 @@ export type Plot = {
 };
 
 // Stage 2 — Greenhouse crops.
-export type CropType = "bamboo" | "lotus" | "reeds" | "mangrove" | "saguaro";
+export type CropType =
+  | "bamboo"
+  | "lotus"
+  | "reeds"
+  | "mangrove"
+  | "saguaro"
+  | "potato";
 
 export type Slot = {
   crop: CropType | null;
@@ -18,10 +24,12 @@ export type Slot = {
 export type CropDef = {
   id: CropType;
   name: string;
-  plantCost: number; // water
+  plantCost: number; // water — paid up front to plant
+  growCost?: number; // water/sec — ongoing upkeep while planted (and while growing for harvest crops)
   growTime: number; // seconds; 0 = passive (no harvest)
   passiveWater?: number; // water/sec while planted
   passiveSalt?: number; // salt/sec while planted
+  foodPerSec?: number; // food/sec while planted (settlement food source)
   harvestFaucetRate?: number; // permanent +u/s on harvest
   harvestSeeds?: number; // seeds on harvest
   heatPerSec?: number; // override default
@@ -63,6 +71,7 @@ export type State = {
   reedsUnlocked: boolean;
   mangroveUnlocked: boolean;
   saguaroUnlocked: boolean;
+  potatoUnlocked: boolean;
   stage2Unlocked: boolean;
   // Stage 3 — Aqueducts
   aqueducts: number;
@@ -152,19 +161,21 @@ export const MAX_SPIN_SPEED = 1080; // deg/sec (~3 revs/sec)
 export const SPIN_CLICK_BOOST = 540; // deg/sec added per click — meaty kick
 export const SPIN_DECAY = 1200; // deg/sec/sec linear decay — snappy spin-down
 
-export const SPIN_GAIN_BASE = 0.1;
-export const SPIN_YIELD_INC = 0.15;
+export const SPIN_GAIN_BASE = 0.5;
+export const SPIN_YIELD_INC = 0.75;
 export const FAUCET_INC = 0.15;
 export const FAUCET_MULT_INC = 0.30;
-export const CAP_INC = 10;
+export const CAP_INC = 10; // floor for the capacity increment; see capIncrement()
+export const CAP_GROWTH_RATIO = 0.15; // each cap upgrade adds max(CAP_INC, cap × this)
 export const STAGE1_CAP_THRESHOLD = 20;
 export const SALT_BYPRODUCT_RATIO = 0.04;
 export const BAMBOO_GROW_BASE = 8;
-export const BAMBOO_BASE_YIELD = 0.015;
+export const BAMBOO_BASE_YIELD = 0.005;
+export const BAMBOO_GROW_COST = 0.2; // water/sec while a Stage-1 plot is growing
 // Yield/Fertilizer apply to ALL crops (harvest rate, passive output, growth speed).
 export const YIELD_MULT_PER_LEVEL = 0.25; // +25% to all crop output per level
 export const BAMBOO_SPEED_FACTOR = 0.30; // +30% growth speed per level (all crops)
-export const BAMBOO_PLANT_COST = 3;
+export const BAMBOO_PLANT_COST = 10;
 
 // Stage 2 — Greenhouse constants.
 export const SLOTS_PER_GREENHOUSE = 3;
@@ -195,7 +206,7 @@ export const LABOR_PER_POP = 1;
 export const SCHOOL_LABOR_MULT = 2;
 export const BASE_FOOD_CAP = 20;
 export const FOOD_CAP_PER_GRANARY = 30;
-export const FOOD_PER_PLANTED_SLOT = 0.025; // per planted greenhouse slot per sec
+// Per-crop food yields live on each CROPS entry's `foodPerSec` field. No global default.
 
 // Stage 5 — Industry.
 export const BOILER_WATER_PER_SEC = 0.5;
@@ -249,53 +260,75 @@ export const researchCost = (base: number, mult: number, level: number) =>
   Math.ceil(base * Math.pow(mult, level));
 
 // Crop catalog. Keep in lockstep with `CropType` so all crop branches are typed.
+// All crops cost water on plant (plantCost) AND ongoing water upkeep (growCost) —
+// when water runs out, growth halts but the plant doesn't wither.
 export const CROPS: Record<CropType, CropDef> = {
   bamboo: {
     id: "bamboo",
     name: "Bamboo",
-    plantCost: 3,
+    plantCost: 10,
+    growCost: 0.2,
     growTime: 8,
-    harvestFaucetRate: 0.015,
+    harvestFaucetRate: 0.005,
     harvestSeeds: 1,
+    foodPerSec: 0.020,
     heatPerSec: 0.30,
     unlocked: () => true,
   },
   lotus: {
     id: "lotus",
     name: "Lotus",
-    plantCost: 8,
+    plantCost: 25,
+    growCost: 0.04,
     growTime: 0,
-    passiveWater: 0.10,
+    passiveWater: 0.05,
+    foodPerSec: 0.015,
     heatPerSec: 0.10,
     unlocked: (s) => s.lotusUnlocked,
   },
   reeds: {
     id: "reeds",
     name: "Reeds",
-    plantCost: 6,
+    plantCost: 20,
+    growCost: 0.04,
     growTime: 0,
-    passiveSalt: 0.10,
+    passiveSalt: 0.08,
+    foodPerSec: 0.012,
     heatPerSec: 0.20,
     unlocked: (s) => s.reedsUnlocked,
   },
   mangrove: {
     id: "mangrove",
     name: "Mangrove",
-    plantCost: 18,
+    plantCost: 60,
+    growCost: 0.5,
     growTime: 30,
-    harvestFaucetRate: 0.30,
+    harvestFaucetRate: 0.15,
+    foodPerSec: 0.025,
     heatPerSec: 0.45,
     unlocked: (s) => s.mangroveUnlocked,
   },
   saguaro: {
     id: "saguaro",
     name: "Saguaro",
-    plantCost: 12,
+    plantCost: 40,
+    growCost: 0.4,
     growTime: 45,
-    harvestFaucetRate: 0.05,
+    harvestFaucetRate: 0.025,
     harvestSeeds: 4,
+    foodPerSec: 0.020,
     heatPerSec: 0.05,
     unlocked: (s) => s.saguaroUnlocked,
+  },
+  potato: {
+    id: "potato",
+    name: "Potato",
+    plantCost: 20,
+    growCost: 0.08,
+    growTime: 0,
+    foodPerSec: 0.10,
+    heatPerSec: 0.05,
+    unlocked: (s) => s.potatoUnlocked,
   },
 };
 
@@ -328,6 +361,7 @@ export const initialState: State = {
   reedsUnlocked: false,
   mangroveUnlocked: false,
   saguaroUnlocked: false,
+  potatoUnlocked: false,
   stage2Unlocked: false,
   aqueducts: 0,
   aqueductIntegrity: [],
@@ -537,6 +571,8 @@ export const cropHarvestRate = (s: State, crop: CropType): number =>
   (CROPS[crop].harvestFaucetRate ?? 0) * yieldMultiplier(s);
 
 // === Costs ===
+export const capIncrement = (cap: number) =>
+  Math.max(CAP_INC, Math.ceil(cap * CAP_GROWTH_RATIO));
 export const capUpgradeCost = (cap: number) => Math.ceil(cap * 0.85);
 export const faucetUpgradeCost = (level: number) =>
   Math.ceil(4 * Math.pow(1.45, level));
@@ -601,7 +637,7 @@ export function reducer(s: State, a: Action): State {
       const nextPlots = s.plots.map((p) => {
         if (s.stage < 1 || !p.planted) return p;
         if (p.ready) {
-          // auto-harvest if engaged
+          // auto-harvest if engaged — the only path that auto-replants
           if (s.autoHarvesterBought) {
             faucetRate = round(faucetRate + yieldPerHarvest, 3);
             bambooHarvested += 1;
@@ -611,6 +647,10 @@ export function reducer(s: State, a: Action): State {
           }
           return p;
         }
+        // Growing — pay water upkeep. No water = no progress this tick.
+        const upkeep = BAMBOO_GROW_COST * dt;
+        if (water < upkeep) return p;
+        water -= upkeep;
         const progress = p.progress + dt / growT;
         if (progress >= 1) {
           plotsChanged = true;
@@ -633,8 +673,11 @@ export function reducer(s: State, a: Action): State {
           ghChanged = true;
           return { crop: null, progress: 0, ready: false };
         }
-        // Passive crops: produce while planted, no progress.
+        // Passive crops: pay upkeep continuously; no upkeep = no production.
         if (def.growTime === 0) {
+          const upkeep = (def.growCost ?? 0) * dt;
+          if (water < upkeep) return sl;
+          water -= upkeep;
           const yMult = yieldMultiplier(s);
           if (def.passiveWater) {
             const out = def.passiveWater * yMult * dt * heatPenalty;
@@ -648,6 +691,7 @@ export function reducer(s: State, a: Action): State {
         }
         // Harvest crops: advance growth or auto-harvest if ready.
         if (sl.ready) {
+          // Auto-harvester is the only thing that replants; manual harvest empties the slot.
           if (s.autoHarvesterBought) {
             faucetRate = round(faucetRate + cropHarvestRate(s, sl.crop), 3);
             seeds += def.harvestSeeds ?? 0;
@@ -657,6 +701,10 @@ export function reducer(s: State, a: Action): State {
           }
           return sl;
         }
+        // Growing — pay upkeep. No water = no progress this tick.
+        const upkeep = (def.growCost ?? 0) * dt;
+        if (water < upkeep) return sl;
+        water -= upkeep;
         const progress =
           sl.progress + (dt / cropGrowTime(s, sl.crop)) * heatPenalty;
         if (progress >= 1) {
@@ -710,15 +758,12 @@ export function reducer(s: State, a: Action): State {
       let food = s.food;
       let labor = s.labor;
       if (s.stage >= 4) {
-        // Food generated by planted greenhouse slots (re-use loop result).
-        const plantedSlots = nextGhSlots.reduce(
-          (n, sl) => n + (sl.crop ? 1 : 0),
+        // Food generated by planted greenhouse slots — per-crop foodPerSec.
+        const foodGen = nextGhSlots.reduce(
+          (acc, sl) => acc + (sl.crop ? CROPS[sl.crop].foodPerSec ?? 0 : 0),
           0,
         );
-        food = Math.min(
-          foodCap(s),
-          food + plantedSlots * FOOD_PER_PLANTED_SLOT * dt,
-        );
+        food = Math.min(foodCap(s), food + foodGen * dt);
 
         const cap = popCap(s);
         const waterNeed = population * POP_WATER_NEED * dt;
@@ -925,7 +970,8 @@ export function reducer(s: State, a: Action): State {
       if (!p || !p.ready) return s;
       const y = bambooYield(s);
       const next = s.plots.slice();
-      next[a.plotIdx] = { planted: true, progress: 0, ready: false };
+      // Manual harvest empties the plot — replant by clicking Plant.
+      next[a.plotIdx] = { planted: false, progress: 0, ready: false };
       return {
         ...s,
         plots: next,
@@ -967,8 +1013,8 @@ export function reducer(s: State, a: Action): State {
       if (!sl || !sl.crop || !sl.ready) return s;
       const def = CROPS[sl.crop];
       const next = s.ghSlots.slice();
-      // Auto-replant: keep the same crop type, reset progress.
-      next[a.slotIdx] = { crop: sl.crop, progress: 0, ready: false };
+      // Manual harvest empties the slot. Auto-replant requires the auto-harvester upgrade.
+      next[a.slotIdx] = { crop: null, progress: 0, ready: false };
       const rate = cropHarvestRate(s, sl.crop);
       return {
         ...s,
@@ -1001,7 +1047,8 @@ export function reducer(s: State, a: Action): State {
         seeds += def.harvestSeeds ?? 0;
         if (sl.crop === "bamboo") bambooHarvested += 1;
         any = true;
-        return { crop: sl.crop, progress: 0, ready: false };
+        // Manual harvest empties the slot.
+        return { crop: null, progress: 0, ready: false };
       });
       if (!any) return s;
       return { ...s, ghSlots: next, faucetRate, seeds, bambooHarvested };
@@ -1013,7 +1060,8 @@ export function reducer(s: State, a: Action): State {
       const next = s.plots.map((p) => {
         if (p.ready) {
           added += 1;
-          return { planted: true, progress: 0, ready: false };
+          // Manual harvest empties the plot.
+          return { planted: false, progress: 0, ready: false };
         }
         return p;
       });
@@ -1158,10 +1206,11 @@ export const upgrades: Upgrade[] = [
   {
     id: "cap",
     name: "Reservoir Capacity",
-    desc: () => `+${CAP_INC} max water storage`,
+    desc: (s) =>
+      `+${capIncrement(s.capacity)} max water storage (${s.capacity} → ${s.capacity + capIncrement(s.capacity)})`,
     cost: (s) => ({ water: capUpgradeCost(s.capacity) }),
     effect: (s) => ({
-      capacity: s.capacity + CAP_INC,
+      capacity: s.capacity + capIncrement(s.capacity),
       capLevel: s.capLevel + 1,
     }),
     visible: () => true,
@@ -1360,7 +1409,7 @@ export const upgrades: Upgrade[] = [
   {
     id: "cropLotus",
     name: "Cultivar: Lotus",
-    desc: () => "produces water passively while planted (+0.08 u/s per plant)",
+    desc: () => "produces water passively while planted (+0.05 u/s per plant)",
     cost: () => ({ water: 60, seeds: 10 }),
     effect: () => ({ lotusUnlocked: true }),
     visible: (s) => s.stage >= 2,
@@ -1371,7 +1420,7 @@ export const upgrades: Upgrade[] = [
   {
     id: "cropReeds",
     name: "Cultivar: Reeds",
-    desc: () => "produces salt passively while planted (+0.10 salt/s per plant)",
+    desc: () => "produces salt passively while planted (+0.08 salt/s per plant)",
     cost: () => ({ water: 80, seeds: 15 }),
     effect: () => ({ reedsUnlocked: true }),
     visible: (s) => s.stage >= 2 && s.lotusUnlocked,
@@ -1382,7 +1431,7 @@ export const upgrades: Upgrade[] = [
   {
     id: "cropMangrove",
     name: "Cultivar: Mangrove",
-    desc: () => "long grow (30s), +0.30 u/s on harvest — for late-stage scale",
+    desc: () => "long grow (30s), +0.15 u/s on harvest — for late-stage scale",
     cost: () => ({ water: 200, seeds: 40 }),
     effect: () => ({ mangroveUnlocked: true }),
     visible: (s) => s.stage >= 2 && s.lotusUnlocked,
@@ -1394,13 +1443,26 @@ export const upgrades: Upgrade[] = [
   {
     id: "cropSaguaro",
     name: "Cultivar: Saguaro",
-    desc: () => "low heat output, +4 seeds + 0.05 u/s on harvest",
+    desc: () => "low heat output, +4 seeds + 0.025 u/s on harvest",
     cost: () => ({ water: 120, seeds: 25 }),
     effect: () => ({ saguaroUnlocked: true }),
     visible: (s) => s.stage >= 2 && s.reedsUnlocked,
     available: (s) =>
       !s.saguaroUnlocked && s.water >= 120 && s.seeds >= 25,
     done: (s) => s.saguaroUnlocked,
+    group: "greenhouse",
+  },
+  {
+    id: "cropPotato",
+    name: "Cultivar: Potato",
+    desc: () =>
+      "passive food specialist — +0.10 food/s, no other yield (one-shot)",
+    cost: () => ({ water: 200, seeds: 30 }),
+    effect: () => ({ potatoUnlocked: true }),
+    visible: (s) => s.stage >= 4,
+    available: (s) =>
+      !s.potatoUnlocked && s.water >= 200 && s.seeds >= 30,
+    done: (s) => s.potatoUnlocked,
     group: "greenhouse",
   },
 

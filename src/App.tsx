@@ -61,13 +61,15 @@ function App() {
   const [state, dispatch] = useReducer(reducer, undefined, () => {
     return loadSaved() ?? initialState;
   });
-  const [viewedStage, setViewedStage] = useState<Stage>(state.stage);
-
-  // Auto-advance the view when a new stage unlocks. Players can still
+  // Derived state pattern (React 19): when state.stage advances, also bump
+  // viewedStage so the player auto-jumps to the newly unlocked stage. They can
   // navigate back via the tab bar to manage prior-stage infrastructure.
-  useEffect(() => {
+  const [viewedStage, setViewedStage] = useState<Stage>(state.stage);
+  const [trackedStage, setTrackedStage] = useState<Stage>(state.stage);
+  if (trackedStage !== state.stage) {
+    setTrackedStage(state.stage);
     setViewedStage(state.stage);
-  }, [state.stage]);
+  }
 
   // eslint-disable-next-line react-hooks/purity
   const lastRef = useRef<number>(performance.now());
