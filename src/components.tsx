@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { Action, State, Upgrade } from "./game";
-import { SPIN_CLICK_BOOST, SPIN_DECAY, fmt, upgrades } from "./game";
+import {
+  SPIN_CLICK_BOOST,
+  SPIN_DECAY,
+  VAPOR_PER_CLOUD,
+  cycleMultiplier,
+  fmt,
+  foodCap,
+  maxPressure,
+  popCap,
+  upgrades,
+} from "./game";
 
 export function Panel({
   title,
@@ -307,6 +317,126 @@ export function LogFeed({ state }: { state: State }) {
         ))}
       </div>
     </Panel>
+  );
+}
+
+type Tone = "amber" | "steel" | "dim" | "emerald" | "warn" | "bad";
+
+function ResourceChip({
+  label,
+  value,
+  tone = "amber",
+}: {
+  label: string;
+  value: string;
+  tone?: Tone;
+}) {
+  const toneCls =
+    tone === "steel"
+      ? "text-text-h"
+      : tone === "dim"
+        ? "text-text-dim"
+        : tone === "emerald"
+          ? "text-emerald"
+          : tone === "warn"
+            ? "text-warn"
+            : tone === "bad"
+              ? "text-bad"
+              : "text-amber";
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="font-stencil text-[10px] tracking-[0.2em] text-text-dim uppercase">
+        {label}
+      </span>
+      <span className={`font-mono text-sm tabular-nums ${toneCls}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+export function ResourceBar({ state }: { state: State }) {
+  const items: { label: string; value: string; tone?: Tone }[] = [];
+  // Salt is collected from Stage 0 as a faucet by-product.
+  items.push({ label: "salt", value: fmt(state.salt, 1), tone: "dim" });
+  if (state.stage >= 1) {
+    items.push({ label: "seeds", value: state.seeds.toString() });
+    items.push({
+      label: "research",
+      value: `◇${fmt(state.researchPoints, 1)}`,
+    });
+  }
+  if (state.stage >= 2) {
+    items.push({
+      label: "heat",
+      value: fmt(state.heat, 1),
+      tone: state.heat >= 75 ? "warn" : "dim",
+    });
+  }
+  if (state.stage >= 3) {
+    items.push({
+      label: "pressure",
+      value: `${fmt(state.pressure, 0)} / ${maxPressure(state)}`,
+      tone: "dim",
+    });
+  }
+  if (state.stage >= 4) {
+    items.push({
+      label: "pop",
+      value: `${fmt(state.population, 1)} / ${popCap(state)}`,
+    });
+    items.push({
+      label: "food",
+      value: `${fmt(state.food, 1)} / ${foodCap(state)}`,
+      tone: "emerald",
+    });
+    items.push({ label: "labor", value: fmt(state.labor, 0) });
+  }
+  if (state.stage >= 5) {
+    items.push({ label: "steam", value: fmt(state.steam, 1) });
+    items.push({ label: "coal", value: fmt(state.coal, 1), tone: "dim" });
+    items.push({
+      label: "pollution",
+      value: `${fmt(state.pollution, 0)} / 100`,
+      tone: state.pollution >= 60 ? "warn" : "dim",
+    });
+  }
+  if (state.stage >= 6) {
+    items.push({ label: "minerals", value: fmt(state.minerals, 0) });
+    items.push({
+      label: "depth",
+      value: `${fmt(state.depth, 0)} m`,
+      tone: "dim",
+    });
+  }
+  if (state.stage >= 7) {
+    items.push({
+      label: "vapor",
+      value: `${fmt(state.vapor, 1)} / ${VAPOR_PER_CLOUD}`,
+      tone: "steel",
+    });
+    items.push({ label: "clouds", value: fmt(state.clouds, 0) });
+    items.push({ label: "⚡", value: fmt(state.lightning, 1) });
+  }
+  if (state.stage >= 8) {
+    items.push({
+      label: "hydroentropy",
+      value: fmt(state.hydroentropy, 0),
+    });
+    items.push({
+      label: "cycle",
+      value: `×${fmt(cycleMultiplier(state), 2)}`,
+    });
+  }
+
+  return (
+    <nav className="panel relative flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-sm px-3 py-2">
+      <span className="rivet-bl" />
+      <span className="rivet-br" />
+      {items.map((it) => (
+        <ResourceChip key={it.label} {...it} />
+      ))}
+    </nav>
   );
 }
 

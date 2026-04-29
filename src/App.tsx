@@ -17,6 +17,7 @@ import { Stage5 } from "./Stage5";
 import { Stage6 } from "./Stage6";
 import { Stage7 } from "./Stage7";
 import { Stage8 } from "./Stage8";
+import { ResourceBar } from "./components";
 import "./App.css";
 
 const SAVE_KEY = "faucet-incremental-save-v1";
@@ -156,6 +157,8 @@ function App() {
           onSelect={setViewedStage}
         />
       )}
+
+      <ResourceBar state={state} />
 
       <StageRouter stage={viewedStage} state={state} dispatch={dispatch} />
 

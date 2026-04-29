@@ -135,7 +135,14 @@ function GreenhousePanel({ state, dispatch }: Props) {
       </Panel>
     );
   }
-  const cropList: CropType[] = ["bamboo", "lotus", "reeds", "mangrove", "saguaro"];
+  const cropList: CropType[] = [
+    "bamboo",
+    "lotus",
+    "reeds",
+    "mangrove",
+    "saguaro",
+    "potato",
+  ];
   const unlockedCrops = cropList.filter((id) => CROPS[id].unlocked(state));
 
   const readyCount = state.ghSlots.filter(
