@@ -1,10 +1,11 @@
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import {
   effectiveFaucet,
   fmt,
   initialState,
   reducer,
   type Action,
+  type Stage,
   type State,
 } from "./game";
 import { Stage0 } from "./Stage0";
@@ -60,6 +61,13 @@ function App() {
   const [state, dispatch] = useReducer(reducer, undefined, () => {
     return loadSaved() ?? initialState;
   });
+  const [viewedStage, setViewedStage] = useState<Stage>(state.stage);
+
+  // Auto-advance the view when a new stage unlocks. Players can still
+  // navigate back via the tab bar to manage prior-stage infrastructure.
+  useEffect(() => {
+    setViewedStage(state.stage);
+  }, [state.stage]);
 
   // eslint-disable-next-line react-hooks/purity
   const lastRef = useRef<number>(performance.now());
@@ -139,7 +147,15 @@ function App() {
         <div className="strip mt-3" />
       </header>
 
-      <StageRouter state={state} dispatch={dispatch} />
+      {state.stage >= 1 && (
+        <StageTabs
+          current={viewedStage}
+          max={state.stage}
+          onSelect={setViewedStage}
+        />
+      )}
+
+      <StageRouter stage={viewedStage} state={state} dispatch={dispatch} />
 
       <footer className="panel rounded-sm p-3 text-center">
         <span className="rivet-bl" />
@@ -153,13 +169,15 @@ function App() {
 }
 
 function StageRouter({
+  stage,
   state,
   dispatch,
 }: {
+  stage: Stage;
   state: State;
   dispatch: React.Dispatch<Action>;
 }) {
-  switch (state.stage) {
+  switch (stage) {
     case 0:
       return <Stage0 state={state} dispatch={dispatch} />;
     case 1:
@@ -181,6 +199,54 @@ function StageRouter({
     default:
       return <Stage8 state={state} dispatch={dispatch} />;
   }
+}
+
+const STAGE_LABELS: Record<Stage, { roman: string; name: string }> = {
+  0: { roman: "0", name: "Faucet" },
+  1: { roman: "I", name: "Seedstock" },
+  2: { roman: "II", name: "Greenhouse" },
+  3: { roman: "III", name: "Aqueducts" },
+  4: { roman: "IV", name: "Settlement" },
+  5: { roman: "V", name: "Industry" },
+  6: { roman: "VI", name: "Aquifer" },
+  7: { roman: "VII", name: "Atmosphere" },
+  8: { roman: "VIII", name: "Hydrosphere" },
+};
+
+function StageTabs({
+  current,
+  max,
+  onSelect,
+}: {
+  current: Stage;
+  max: Stage;
+  onSelect: (s: Stage) => void;
+}) {
+  const stages: Stage[] = Array.from(
+    { length: max + 1 },
+    (_, i) => i as Stage,
+  );
+  return (
+    <nav className="panel relative flex flex-wrap items-center gap-1.5 rounded-sm p-2">
+      <span className="rivet-bl" />
+      <span className="rivet-br" />
+      {stages.map((s) => {
+        const active = s === current;
+        const label = STAGE_LABELS[s];
+        return (
+          <button
+            key={s}
+            onClick={() => onSelect(s)}
+            className={`btn font-stencil text-[10px] tracking-[0.25em] uppercase ${active ? "btn-amber" : ""}`}
+            title={`Stage ${label.roman} — ${label.name}`}
+          >
+            <span>FCT-{label.roman}</span>
+            <span className="ml-1.5 text-text-dim">{label.name}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 function Readout({
