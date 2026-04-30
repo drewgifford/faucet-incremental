@@ -166,6 +166,7 @@ import {
   SPIN_GAIN_BASE,
   SPIN_YIELD_INC,
   FAUCET_INC,
+  FAUCET_BORE_SCALING,
   FAUCET_MULT_INC,
   STAGE1_CAP_THRESHOLD,
   SALT_BYPRODUCT_RATIO,
@@ -1279,11 +1280,16 @@ export const upgrades: Upgrade[] = [
   {
     id: "faucet",
     name: "Faucet Bore",
-    desc: (s) =>
-      `+${FAUCET_INC.toFixed(2)} u/s base rate (current: ${fmt(s.faucetRate, 2)})`,
+    desc: (s) => {
+      const next = FAUCET_INC * (1 + s.faucetLevel * FAUCET_BORE_SCALING);
+      return `widens the spigot — adds +${fmt(next, 2)} u/s base rate (each level adds more than the last; current base ${fmt(s.faucetRate, 2)})`;
+    },
     cost: (s) => ({ water: faucetUpgradeCost(s.faucetLevel) }),
     effect: (s) => ({
-      faucetRate: round(s.faucetRate + FAUCET_INC, 3),
+      faucetRate: round(
+        s.faucetRate + FAUCET_INC * (1 + s.faucetLevel * FAUCET_BORE_SCALING),
+        3,
+      ),
       faucetLevel: s.faucetLevel + 1,
     }),
     visible: () => true,

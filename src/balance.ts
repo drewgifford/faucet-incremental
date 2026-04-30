@@ -17,7 +17,12 @@ export const SPIN_DECAY = 1200;
 // === Stage 0 — Faucet & wheel ===
 export const SPIN_GAIN_BASE = 0.08; // water per spin (lower → more clicking to start)
 export const SPIN_YIELD_INC = 0.22; // +per spinYield level
-export const FAUCET_INC = 0.05; // +u/s per faucet level
+// Faucet Bore widens the spigot. Per-level gain = FAUCET_INC × (1 + level × FAUCET_BORE_SCALING) —
+// every successive level adds *more* base flow than the one before it. Pressure
+// Regulator stays as the flat ×multiplier; the two upgrades occupy distinct
+// niches (ramping additive vs. flat multiplier).
+export const FAUCET_INC = 0.05;
+export const FAUCET_BORE_SCALING = 0.30;
 export const FAUCET_MULT_INC = 0.16; // ×multiplier per pressure-regulator level
 export const CAP_INC = 6;
 export const CAP_GROWTH_RATIO = 0.12;
@@ -333,12 +338,12 @@ export const MILESTONE = {
     boilersReq: 12, steamReq: 5000,
   },
   stage7: {
-    mineralsCost: 11000, steamCost: 60000,
-    depthReq: 6200, mineralsReq: 8000,
+    mineralsCost: 16000, steamCost: 90000,
+    depthReq: 9000, mineralsReq: 14000,
   },
   stage8: {
-    mineralsCost: 60000, lightningCost: 1900,
-    cloudsReq: 600, lightningReq: 1800,
+    mineralsCost: 90000, lightningCost: 2900,
+    cloudsReq: 850, lightningReq: 2700,
   },
 };
 
