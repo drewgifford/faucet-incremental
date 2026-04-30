@@ -4,6 +4,7 @@ import {
   CLOUD_FAUCET_BONUS,
   cloudBonus,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   lightningPerSec,
   maxSpinSpeed,
@@ -34,6 +35,7 @@ export function Stage7({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>

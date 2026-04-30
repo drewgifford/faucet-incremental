@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import {
-  effectiveFaucet,
+  currentDrainRate,
+  currentNetRate,
   fmt,
   initialState,
   reducer,
@@ -114,7 +115,39 @@ function App() {
     };
   }, []);
 
-  const totalRate = effectiveFaucet(state);
+  // Net rate readout = analytic steady-state (passive sources − all drains)
+  // PLUS a smoothed window of actual `totalWater` deltas so user clicks
+  // (spin gains, pressure release, etc.) register in the readout too. EMA
+  // alpha = dt / window keeps it framerate-independent.
+  const prevTotalRef = useRef(state.totalWater);
+  const prevSampleTimeRef = useRef(performance.now());
+  const emaClickGainRef = useRef(0);
+  const [headerRate, setHeaderRate] = useState(currentNetRate(state));
+
+  useEffect(() => {
+    const now = performance.now();
+    const dt = (now - prevSampleTimeRef.current) / 1000;
+    if (dt < 0.05) return; // throttle to ~20 Hz max
+    // Total water gain since last sample includes EVERYTHING that increased
+    // water this frame — passive faucet, crop passive output, spin clicks,
+    // pressure release, etc. We back out the analytic passive contribution to
+    // isolate the "extra" (clicks etc.); whatever's left is the user-driven
+    // gain we want to surface in the rate readout.
+    const dGain = state.totalWater - prevTotalRef.current;
+    const observedGainPerSec = dGain / dt;
+    const analyticGenPerSec =
+      currentNetRate(state) + currentDrainRate(state); // gross gain rate
+    const extraGain = Math.max(0, observedGainPerSec - analyticGenPerSec);
+    const window = 5.0; // 5-second smoothing window — keeps the readout steady
+    const alpha = Math.min(1, dt / window);
+    emaClickGainRef.current =
+      emaClickGainRef.current * (1 - alpha) + extraGain * alpha;
+    prevTotalRef.current = state.totalWater;
+    prevSampleTimeRef.current = now;
+    setHeaderRate(currentNetRate(state) + emaClickGainRef.current);
+  }, [state.totalWater, state]);
+
+  const totalRate = headerRate;
 
   return (
     <div className="mx-auto flex min-h-svh max-w-[1280px] flex-col gap-4 px-4 pt-4 pb-8">

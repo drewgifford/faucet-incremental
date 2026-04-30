@@ -4,7 +4,9 @@ import {
   BAMBOO_PLANT_COST,
   bambooGrowTime,
   bambooYield,
+  CROPS,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   maxSpinSpeed,
   spinGain,
@@ -26,6 +28,7 @@ export function Stage1({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>
@@ -88,8 +91,23 @@ function BambooPanel({ state, dispatch }: Props) {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between text-xs text-text-dim">
           <span>cycle: {fmt(growT, 1)}s</span>
-          <span>yield/harvest: +{fmt(y, 3)} u/s · +1 seed</span>
+          <span>
+            yield/harvest: +{fmt(y, 3)} u/s · +1 seed
+            {(CROPS.bamboo.harvestSalt ?? 0) > 0 &&
+              ` · +${fmt(CROPS.bamboo.harvestSalt ?? 0, 2)} salt`}
+          </span>
         </div>
+        {state.autoHarvesterBought && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-dim">auto-harvester</span>
+            <button
+              onClick={() => dispatch({ type: "toggleAutoHarvester" })}
+              className={`btn text-[10px] ${state.autoHarvesterEnabled ? "btn-emerald" : ""}`}
+            >
+              {state.autoHarvesterEnabled ? "ON" : "OFF"}
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {state.plots.map((p, i) => (
@@ -123,8 +141,11 @@ function BambooPanel({ state, dispatch }: Props) {
         </div>
 
         {state.autoHarvesterBought && (
-          <div className="text-emerald font-stencil text-[10px] tracking-widest uppercase">
-            ◆ auto-harvester engaged
+          <div
+            className={`font-stencil text-[10px] tracking-widest uppercase ${state.autoHarvesterEnabled ? "text-emerald" : "text-text-dim"}`}
+          >
+            ◆ auto-harvester{" "}
+            {state.autoHarvesterEnabled ? "engaged" : "disengaged"}
           </div>
         )}
       </div>
@@ -189,7 +210,7 @@ function PlotRow({
             }
             disabled={!plot.ready}
           >
-            Harvest +{fmt(yieldVal, 3)}
+            Harvest (+{fmt(yieldVal, 3)} u/s)
           </button>
         )}
       </div>

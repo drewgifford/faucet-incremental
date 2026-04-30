@@ -13,7 +13,8 @@ export type CropType =
   | "reeds"
   | "mangrove"
   | "saguaro"
-  | "potato";
+  | "potato"
+  | "brinePool";
 
 export type Slot = {
   crop: CropType | null;
@@ -57,6 +58,7 @@ export type State = {
   // One-shot upgrades
   reservoirPressureBought: boolean;
   autoHarvesterBought: boolean;
+  autoHarvesterEnabled: boolean;
   stage1Unlocked: boolean;
   // Stage 1 — Bamboo plots (multi)
   plots: Plot[];
@@ -72,6 +74,7 @@ export type State = {
   mangroveUnlocked: boolean;
   saguaroUnlocked: boolean;
   potatoUnlocked: boolean;
+  brinePoolUnlocked: boolean;
   stage2Unlocked: boolean;
   // Stage 3 — Aqueducts
   aqueducts: number;
@@ -154,183 +157,135 @@ export type LogEntry = {
   ts: number; // ms
 };
 
-export const LOG_CAP = 6;
+// Re-export every balance knob so existing components keep importing from "./game".
+export * from "./balance";
 
-// Wheel physics — purely visual, lives in component state.
-export const MAX_SPIN_SPEED = 1080; // deg/sec (~3 revs/sec)
-export const SPIN_CLICK_BOOST = 540; // deg/sec added per click — meaty kick
-export const SPIN_DECAY = 1200; // deg/sec/sec linear decay — snappy spin-down
-
-export const SPIN_GAIN_BASE = 0.5;
-export const SPIN_YIELD_INC = 0.75;
-export const FAUCET_INC = 0.15;
-export const FAUCET_MULT_INC = 0.30;
-export const CAP_INC = 10; // floor for the capacity increment; see capIncrement()
-export const CAP_GROWTH_RATIO = 0.15; // each cap upgrade adds max(CAP_INC, cap × this)
-export const STAGE1_CAP_THRESHOLD = 20;
-export const SALT_BYPRODUCT_RATIO = 0.04;
-export const BAMBOO_GROW_BASE = 8;
-export const BAMBOO_BASE_YIELD = 0.005;
-export const BAMBOO_GROW_COST = 0.2; // water/sec while a Stage-1 plot is growing
-// Yield/Fertilizer apply to ALL crops (harvest rate, passive output, growth speed).
-export const YIELD_MULT_PER_LEVEL = 0.25; // +25% to all crop output per level
-export const BAMBOO_SPEED_FACTOR = 0.30; // +30% growth speed per level (all crops)
-export const BAMBOO_PLANT_COST = 10;
-
-// Stage 2 — Greenhouse constants.
-export const SLOTS_PER_GREENHOUSE = 3;
-export const HEAT_PER_PLANT_SEC = 0.35;
-export const VENT_RATE_PER_LEVEL = 0.7;
-export const HEAT_DECAY_BASE = 0.15; // ambient passive cooling
-export const HEAT_GROWTH_THRESHOLD = 75; // > this halves growth speed
-export const HEAT_WITHER_THRESHOLD = 100; // crop withers at >= this
-
-// Stage 3 — Aqueducts.
-export const AQUEDUCT_AMP = 0.06; // each aqueduct: ×(1 + 0.06 × integrity) — tuned for late-game ceiling
-export const AQUEDUCT_DECAY_BASE = 0.008; // integrity lost / sec
-export const PRESSURE_BASE_MAX = 100;
-export const PRESSURE_CAP_PER_LEVEL = 50;
-export const PRESSURE_BUILD_BASE = 0.4; // per sec passive
-export const PRESSURE_BUILD_PER_RATE = 0.6; // scales with faucetRate
-export const PRESSURE_BURST_MULT_BASE = 1.0;
-export const PRESSURE_BURST_MULT_VALVE = 2.5;
-
-// Stage 4 — Settlement.
-export const BASE_POP_CAP = 10;
-export const POP_CAP_PER_LEVEL = 5;
-export const POP_GROWTH_RATE = 0.4; // per sec, modulated by gap and surplus
-export const POP_WATER_NEED = 0.15; // per pop per sec — settlement size now matters for water budget
-export const POP_FOOD_NEED = 0.05;
-export const POP_DECAY_RATE = 0.6; // pop lost / sec when starving
-export const LABOR_PER_POP = 1;
-export const SCHOOL_LABOR_MULT = 2;
-export const BASE_FOOD_CAP = 20;
-export const FOOD_CAP_PER_GRANARY = 30;
-// Per-crop food yields live on each CROPS entry's `foodPerSec` field. No global default.
-
-// Stage 5 — Industry.
-export const BOILER_WATER_PER_SEC = 8.0;
-export const BOILER_COAL_PER_SEC = 0.4;
-export const BOILER_STEAM_OUT_PER_SEC = 6.0;
-export const TURBINE_MULT_PER = 0.025;
-export const POLLUTION_PER_BOILER = 1.5; // per sec when burning coal
-export const POLLUTION_DECAY = 0.15; // per sec
-export const POLLUTION_MAX = 100;
-export const POLLUTION_RATE_PENALTY_MAX = 0.5; // worst-case rate cut (×0.5)
-export const COAL_TRADE_WATER = 10; // 10 water → 1 coal (Stage 5 market)
-
-// Stage 6 — Aquifer.
-export const DRILL_BASE_SPEED = 1.0; // m/s
-export const DRILL_SPEED_PER_LEVEL = 0.6;
-export const AQUIFER_DEPTH = 300; // m — water bonus starts here
-export const AQUIFER_BONUS_PER_M = 0.0025;
-export const MAGMA_DEPTH = 800;
-export const MINERAL_RATE_FACTOR = 0.0008; // per m per sec while drilling
-export const CAVE_IN_REF_DEPTH = 1000; // baseline depth for cave-in math
-export const CAVE_IN_BASE_PROB = 0.0009; // per sec at ref depth, 0 supports
-export const CAVE_IN_LOSS = 0.12;
-export const SALT_PER_MINERAL = 10;
-export const GEOTHERMAL_BONUS = 0.30; // +30% all rates when active
-
-// Stage 7 — Atmosphere.
-export const SEEDER_WATER_PER_SEC = 5.0;
-export const SEEDER_STEAM_PER_SEC = 1.0;
-export const SEEDER_VAPOR_PER_SEC = 2.5;
-export const VAPOR_PER_CLOUD = 50;
-export const CLOUD_FAUCET_BONUS = 0.06; // each cloud → +0.06 u/s base
-export const LIGHTNING_BASE_RATE = 0.001; // per cloud per sec
-export const LIGHTNING_CAP_MULT = 3; // capacitor multiplier
-
-// Stage 8 — Hydrosphere.
-export const HYDROENTROPY_RATE = 0.05; // hydroentropy per (effective u/s) per sec
-export const HYDROENTROPY_TARGET = 5e7; // ascension unlock threshold
-export const CYCLE_MULT_INC = 0.25; // each cycle ascension adds +25% to all rates
-
-// === Research ===
-// Base passive RP/sec by stage (index = stage). 0 at S0; ramps with progression.
-export const RP_BASE_PER_STAGE = [0, 0.04, 0.07, 0.11, 0.16, 0.22, 0.30, 0.40, 0.55] as const;
-// Keystone one-shot RP/s contributions.
-export const RP_KEYSTONE_LIBRARY = 0.05;
-export const RP_KEYSTONE_STEAM_PRESS = 0.15;
-export const RP_KEYSTONE_CRYSTAL_LATTICE = 0.40;
-export const RP_KEYSTONE_SKY_ARCHIVE = 1.0;
-export const RP_KEYSTONE_AETHERIC_MEMORY = 3.0;
-// Repeatable RP-cost helper: ceil(base × mult^level).
-export const researchCost = (base: number, mult: number, level: number) =>
-  Math.ceil(base * Math.pow(mult, level));
-
-// Crop catalog. Keep in lockstep with `CropType` so all crop branches are typed.
-// All crops cost water on plant (plantCost) AND ongoing water upkeep (growCost) —
-// when water runs out, growth halts but the plant doesn't wither.
-export const CROPS: Record<CropType, CropDef> = {
-  bamboo: {
-    id: "bamboo",
-    name: "Bamboo",
-    plantCost: 10,
-    growCost: 0.2,
-    growTime: 8,
-    harvestFaucetRate: 0.005,
-    harvestSeeds: 1,
-    foodPerSec: 0.020,
-    heatPerSec: 0.30,
-    unlocked: () => true,
-  },
-  lotus: {
-    id: "lotus",
-    name: "Lotus",
-    plantCost: 25,
-    growCost: 0.04,
-    growTime: 0,
-    passiveWater: 0.05,
-    foodPerSec: 0.015,
-    heatPerSec: 0.10,
-    unlocked: (s) => s.lotusUnlocked,
-  },
-  reeds: {
-    id: "reeds",
-    name: "Reeds",
-    plantCost: 20,
-    growCost: 0.04,
-    growTime: 0,
-    passiveSalt: 0.08,
-    foodPerSec: 0.012,
-    heatPerSec: 0.20,
-    unlocked: (s) => s.reedsUnlocked,
-  },
-  mangrove: {
-    id: "mangrove",
-    name: "Mangrove",
-    plantCost: 60,
-    growCost: 0.5,
-    growTime: 30,
-    harvestFaucetRate: 0.15,
-    foodPerSec: 0.025,
-    heatPerSec: 0.45,
-    unlocked: (s) => s.mangroveUnlocked,
-  },
-  saguaro: {
-    id: "saguaro",
-    name: "Saguaro",
-    plantCost: 40,
-    growCost: 0.4,
-    growTime: 45,
-    harvestFaucetRate: 0.025,
-    harvestSeeds: 4,
-    foodPerSec: 0.020,
-    heatPerSec: 0.05,
-    unlocked: (s) => s.saguaroUnlocked,
-  },
-  potato: {
-    id: "potato",
-    name: "Potato",
-    plantCost: 20,
-    growCost: 0.08,
-    growTime: 0,
-    foodPerSec: 0.10,
-    heatPerSec: 0.05,
-    unlocked: (s) => s.potatoUnlocked,
-  },
-};
+import {
+  LOG_CAP,
+  MAX_SPIN_SPEED,
+  SPIN_GAIN_BASE,
+  SPIN_YIELD_INC,
+  FAUCET_INC,
+  FAUCET_MULT_INC,
+  STAGE1_CAP_THRESHOLD,
+  SALT_BYPRODUCT_RATIO,
+  BAMBOO_GROW_BASE,
+  BAMBOO_BASE_YIELD,
+  BAMBOO_GROW_COST,
+  YIELD_MULT_PER_LEVEL,
+  BAMBOO_SPEED_FACTOR,
+  BAMBOO_PLANT_COST,
+  SLOTS_PER_GREENHOUSE,
+  HEAT_PER_PLANT_SEC,
+  VENT_RATE_PER_LEVEL,
+  HEAT_DECAY_BASE,
+  HEAT_GROWTH_THRESHOLD,
+  HEAT_WITHER_THRESHOLD,
+  AQUEDUCT_AMP,
+  AQUEDUCT_DECAY_BASE,
+  PRESSURE_BASE_MAX,
+  PRESSURE_CAP_PER_LEVEL,
+  PRESSURE_BUILD_BASE,
+  PRESSURE_BUILD_PER_RATE,
+  PRESSURE_BURST_MULT_VALVE,
+  PRESSURE_BURST_MULT_BASE,
+  BASE_POP_CAP,
+  POP_CAP_PER_LEVEL,
+  POP_GROWTH_RATE,
+  POP_WATER_NEED,
+  POP_FOOD_NEED,
+  POP_DECAY_RATE,
+  LABOR_PER_POP,
+  SCHOOL_LABOR_MULT,
+  BASE_FOOD_CAP,
+  FOOD_CAP_PER_GRANARY,
+  BOILER_WATER_PER_SEC,
+  BOILER_COAL_PER_SEC,
+  BOILER_STEAM_OUT_PER_SEC,
+  TURBINE_MULT_PER,
+  POLLUTION_PER_BOILER,
+  POLLUTION_DECAY,
+  POLLUTION_MAX,
+  POLLUTION_RATE_PENALTY_MAX,
+  COAL_TRADE_WATER,
+  DRILL_BASE_SPEED,
+  DRILL_SPEED_PER_LEVEL,
+  AQUIFER_DEPTH,
+  AQUIFER_BONUS_PER_M,
+  MAGMA_DEPTH,
+  MINERAL_RATE_FACTOR,
+  CAVE_IN_REF_DEPTH,
+  CAVE_IN_BASE_PROB,
+  CAVE_IN_LOSS,
+  SALT_PER_MINERAL,
+  GEOTHERMAL_BONUS,
+  SEEDER_WATER_PER_SEC,
+  SEEDER_STEAM_PER_SEC,
+  SEEDER_VAPOR_PER_SEC,
+  VAPOR_PER_CLOUD,
+  CLOUD_FAUCET_BONUS,
+  LIGHTNING_BASE_RATE,
+  LIGHTNING_CAP_MULT,
+  HYDROENTROPY_RATE,
+  HYDROENTROPY_TARGET,
+  CYCLE_MULT_INC,
+  RP_BASE_PER_STAGE,
+  RP_KEYSTONE_LIBRARY,
+  RP_KEYSTONE_STEAM_PRESS,
+  RP_KEYSTONE_CRYSTAL_LATTICE,
+  RP_KEYSTONE_SKY_ARCHIVE,
+  RP_KEYSTONE_AETHERIC_MEMORY,
+  researchCost,
+  CROPS,
+  capIncrement,
+  capUpgradeCost,
+  faucetUpgradeCost,
+  spinYieldCost,
+  faucetMultCost,
+  autoSpinnerCost,
+  maxSpeedCost,
+  bambooYieldCost,
+  bambooSpeedCost,
+  greenhouseWaterCost,
+  greenhouseSeedsCost,
+  ventsCost,
+  thermostatCost,
+  cropLotusCost,
+  cropReedsCost,
+  cropMangroveCost,
+  cropSaguaroCost,
+  cropPotatoCost,
+  cropBrinePoolCost,
+  aqueductWaterCost,
+  aqueductSaltCost,
+  aqueductDurabilityCost,
+  pressureCapCost,
+  pressureValveCost,
+  housingWaterCost,
+  housingSeedsCost,
+  granaryWaterCost,
+  granarySeedsCost,
+  schoolCost,
+  boilerWaterCost,
+  boilerLaborCost,
+  turbineSteamCost,
+  turbineLaborCost,
+  electrolysisCost,
+  drillBitWaterCost,
+  drillBitMineralsCost,
+  supportBeamsWaterCost,
+  supportBeamsMineralsCost,
+  geothermalTapCost,
+  cloudSeederWaterCost,
+  cloudSeederMineralsCost,
+  lightningCapacitorCost,
+  weatherSatelliteCost,
+  reservoirPressureCost,
+  reservoirPressureBonus,
+  bambooPlotSeedCost,
+  autoHarvesterSaltCost,
+  MILESTONE,
+} from "./balance";
 
 export const initialState: State = {
   stage: 0,
@@ -349,6 +304,7 @@ export const initialState: State = {
   bambooSpeedLevel: 0,
   reservoirPressureBought: false,
   autoHarvesterBought: false,
+  autoHarvesterEnabled: true,
   stage1Unlocked: false,
   plots: [{ planted: false, progress: 0, ready: false }],
   bambooHarvested: 0,
@@ -362,6 +318,7 @@ export const initialState: State = {
   mangroveUnlocked: false,
   saguaroUnlocked: false,
   potatoUnlocked: false,
+  brinePoolUnlocked: false,
   stage2Unlocked: false,
   aqueducts: 0,
   aqueductIntegrity: [],
@@ -480,6 +437,56 @@ export const effectiveFaucet = (s: State) =>
   pollutionPenalty(s) *
   cycleMultiplier(s);
 
+// Sum every steady-state water DRAIN currently affecting the reservoir, in
+// water/sec. Excludes one-shot events (replant cost, milestone purchases).
+export const currentDrainRate = (s: State): number => {
+  let drain = 0;
+  // Stage 1 — bamboo plot upkeep (only while growing, not when ready)
+  if (s.stage >= 1) {
+    for (const p of s.plots) {
+      if (p.planted && !p.ready) drain += BAMBOO_GROW_COST;
+    }
+  }
+  // Stage 2+ — greenhouse slot upkeep (per CropDef growCost)
+  if (s.stage >= 2) {
+    for (const sl of s.ghSlots) {
+      if (!sl.crop) continue;
+      const def = CROPS[sl.crop];
+      // Passive crops always upkeep; harvest crops only while growing.
+      if (def.growTime === 0 || !sl.ready) {
+        drain += def.growCost ?? 0;
+      }
+    }
+  }
+  // Stage 4+ — population water demand
+  if (s.stage >= 4) drain += s.population * POP_WATER_NEED;
+  // Stage 5+ — boilers
+  if (s.stage >= 5) drain += s.boilers * BOILER_WATER_PER_SEC;
+  // Stage 7+ — cloud seeders
+  if (s.stage >= 7) drain += s.cloudSeeders * SEEDER_WATER_PER_SEC;
+  return drain;
+};
+
+// Sum every steady-state water SOURCE not already in effectiveFaucet — i.e.
+// the passive output of greenhouse crops (lotus, watercress, etc.).
+export const currentPassiveCropOutput = (s: State): number => {
+  if (s.stage < 2) return 0;
+  const yMult = yieldMultiplier(s);
+  const heatPenalty = s.heat >= HEAT_GROWTH_THRESHOLD ? 0.5 : 1;
+  let out = 0;
+  for (const sl of s.ghSlots) {
+    if (!sl.crop) continue;
+    const def = CROPS[sl.crop];
+    if (def.passiveWater) out += def.passiveWater * yMult * heatPenalty;
+  }
+  return out;
+};
+
+// Steady-state net water rate — the analytic "if you stand still" view.
+// Header readout pairs this with a smoothed gain-delta to fold in user clicks.
+export const currentNetRate = (s: State): number =>
+  effectiveFaucet(s) + currentPassiveCropOutput(s) - currentDrainRate(s);
+
 export const aqueductDecayPerSec = (s: State) =>
   (AQUEDUCT_DECAY_BASE / (1 + s.aqueductDurabilityLevel * 0.5)) *
   (s.weatherSatelliteBought ? 0.5 : 1) *
@@ -580,24 +587,7 @@ export const cropHarvestRate = (s: State, crop: CropType): number =>
     (CROPS[crop].harvestFaucetRate ?? 0) * yieldMultiplier(s),
   );
 
-// === Costs ===
-export const capIncrement = (cap: number) =>
-  Math.max(CAP_INC, Math.ceil(cap * CAP_GROWTH_RATIO));
-export const capUpgradeCost = (cap: number) => Math.ceil(cap * 0.85);
-export const faucetUpgradeCost = (level: number) =>
-  Math.ceil(4 * Math.pow(1.45, level));
-export const spinYieldCost = (level: number) =>
-  Math.ceil(6 * Math.pow(1.85, level));
-export const faucetMultCost = (level: number) =>
-  Math.ceil(45 * Math.pow(2.6, level));
-export const autoSpinnerCost = (level: number) =>
-  Math.ceil(12 * Math.pow(2.3, level));
-export const maxSpeedCost = (level: number) =>
-  Math.ceil(16 * Math.pow(2.0, level));
-export const bambooYieldCost = (level: number) =>
-  Math.ceil(8 * Math.pow(1.6, level));
-export const bambooSpeedCost = (level: number) =>
-  Math.ceil(10 * Math.pow(1.55, level));
+// Cost formulas live in balance.ts and are imported above.
 
 export type Action =
   | { type: "tick"; dt: number }
@@ -615,6 +605,7 @@ export type Action =
   | { type: "releasePressure" }
   | { type: "buyCoal"; amount: number }
   | { type: "toggleDrill" }
+  | { type: "toggleAutoHarvester" }
   | { type: "convertSalt"; salt: number }
   | { type: "ascendCycle" }
   | { type: "reset" }
@@ -647,13 +638,20 @@ export function reducer(s: State, a: Action): State {
       const nextPlots = s.plots.map((p) => {
         if (s.stage < 1 || !p.planted) return p;
         if (p.ready) {
-          // auto-harvest if engaged — the only path that auto-replants
-          if (s.autoHarvesterBought) {
+          // auto-harvest if engaged — the only path that auto-replants.
+          // Replant pays the plant cost; if water can't cover it, harvest the
+          // crop but leave the plot empty until water is back.
+          if (s.autoHarvesterBought && s.autoHarvesterEnabled) {
             faucetRate = round(faucetRate + yieldPerHarvest, 3);
             bambooHarvested += 1;
             seeds += 1;
+            salt += CROPS.bamboo.harvestSalt ?? 0;
             plotsChanged = true;
-            return { planted: true, progress: 0, ready: false };
+            if (water >= BAMBOO_PLANT_COST) {
+              water -= BAMBOO_PLANT_COST;
+              return { planted: true, progress: 0, ready: false };
+            }
+            return { planted: false, progress: 0, ready: false };
           }
           return p;
         }
@@ -702,12 +700,19 @@ export function reducer(s: State, a: Action): State {
         // Harvest crops: advance growth or auto-harvest if ready.
         if (sl.ready) {
           // Auto-harvester is the only thing that replants; manual harvest empties the slot.
-          if (s.autoHarvesterBought) {
+          // Replant pays the crop's plant cost; if water can't cover it, the
+          // slot empties until water is back (matches manual-harvest behavior).
+          if (s.autoHarvesterBought && s.autoHarvesterEnabled) {
             faucetRate = round(faucetRate + cropHarvestRate(s, sl.crop), 3);
             seeds += def.harvestSeeds ?? 0;
+            salt += def.harvestSalt ?? 0;
             if (sl.crop === "bamboo") bambooHarvested += 1;
             ghChanged = true;
-            return { crop: sl.crop, progress: 0, ready: false };
+            if (water >= def.plantCost) {
+              water -= def.plantCost;
+              return { crop: sl.crop, progress: 0, ready: false };
+            }
+            return { crop: null, progress: 0, ready: false };
           }
           return sl;
         }
@@ -987,6 +992,7 @@ export function reducer(s: State, a: Action): State {
         plots: next,
         bambooHarvested: s.bambooHarvested + 1,
         seeds: s.seeds + 1,
+        salt: round(s.salt + (CROPS.bamboo.harvestSalt ?? 0)),
         faucetRate: round(s.faucetRate + y, 3),
       };
     }
@@ -1026,6 +1032,8 @@ export function reducer(s: State, a: Action): State {
       // Manual harvest empties the slot. Auto-replant requires the auto-harvester upgrade.
       next[a.slotIdx] = { crop: null, progress: 0, ready: false };
       const rate = cropHarvestRate(s, sl.crop);
+      // harvestSalt is intentionally Stage-1-plot-only; greenhouse bamboo does
+      // not yield salt — that's reeds' job in stage 2+.
       return {
         ...s,
         ghSlots: next,
@@ -1055,6 +1063,7 @@ export function reducer(s: State, a: Action): State {
         const rate = cropHarvestRate(s, sl.crop);
         if (rate > 0) faucetRate = round(faucetRate + rate, 3);
         seeds += def.harvestSeeds ?? 0;
+        // harvestSalt is Stage-1-plot-only; reeds handle salt in greenhouse.
         if (sl.crop === "bamboo") bambooHarvested += 1;
         any = true;
         // Manual harvest empties the slot.
@@ -1076,11 +1085,13 @@ export function reducer(s: State, a: Action): State {
         return p;
       });
       if (added === 0) return s;
+      const saltPer = CROPS.bamboo.harvestSalt ?? 0;
       return {
         ...s,
         plots: next,
         bambooHarvested: s.bambooHarvested + added,
         seeds: s.seeds + added,
+        salt: round(s.salt + saltPer * added),
         faucetRate: round(s.faucetRate + y * added, 3),
       };
     }
@@ -1113,6 +1124,10 @@ export function reducer(s: State, a: Action): State {
 
     case "toggleDrill":
       return { ...s, drilling: !s.drilling };
+
+    case "toggleAutoHarvester":
+      if (!s.autoHarvesterBought) return s;
+      return { ...s, autoHarvesterEnabled: !s.autoHarvesterEnabled };
 
     case "convertSalt": {
       if (s.salt < a.salt) return s;
@@ -1231,15 +1246,17 @@ export const upgrades: Upgrade[] = [
   {
     id: "reservoirPressure",
     name: "Reservoir Pressure",
-    desc: () => `+25 capacity, +0.5 u/s base faucet rate (one-shot)`,
-    cost: () => ({ water: 80 }),
+    desc: () =>
+      `+${reservoirPressureBonus.capacity} capacity, +${reservoirPressureBonus.faucetRate} u/s base faucet rate (one-shot)`,
+    cost: () => ({ water: reservoirPressureCost.water }),
     effect: (s) => ({
-      capacity: s.capacity + 25,
-      faucetRate: round(s.faucetRate + 0.5, 3),
+      capacity: s.capacity + reservoirPressureBonus.capacity,
+      faucetRate: round(s.faucetRate + reservoirPressureBonus.faucetRate, 3),
       reservoirPressureBought: true,
     }),
     visible: (s) => s.capacity >= 20,
-    available: (s) => !s.reservoirPressureBought && s.water >= 80,
+    available: (s) =>
+      !s.reservoirPressureBought && s.water >= reservoirPressureCost.water,
     done: (s) => s.reservoirPressureBought,
     group: "storage",
   },
@@ -1278,7 +1295,7 @@ export const upgrades: Upgrade[] = [
     id: "faucetMult",
     name: "Pressure Regulator",
     desc: (s) =>
-      `faucet ×${faucetMultiplier(s).toFixed(2)} → ×${(faucetMultiplier(s) + FAUCET_MULT_INC).toFixed(2)}`,
+      `passive flow ×${faucetMultiplier(s).toFixed(2)} → ×${(faucetMultiplier(s) + FAUCET_MULT_INC).toFixed(2)}`,
     cost: (s) => ({ water: faucetMultCost(s.faucetMultLevel) }),
     effect: (s) => ({ faucetMultLevel: s.faucetMultLevel + 1 }),
     visible: (s) => s.faucetLevel >= 3,
@@ -1342,12 +1359,12 @@ export const upgrades: Upgrade[] = [
     id: "bambooPlot",
     name: "Extra Bamboo Plot",
     desc: (s) => `+1 parallel plot (currently ${s.plots.length})`,
-    cost: (s) => ({ seeds: 5 + (s.plots.length - 1) * 8 }),
+    cost: (s) => ({ seeds: bambooPlotSeedCost(s.plots.length) }),
     effect: (s) => ({
       plots: [...s.plots, { planted: false, progress: 0, ready: false }],
     }),
     visible: (s) => s.stage === 1 && s.seeds >= 3,
-    available: (s) => s.seeds >= 5 + (s.plots.length - 1) * 8,
+    available: (s) => s.seeds >= bambooPlotSeedCost(s.plots.length),
     level: (s) => s.plots.length - 1,
     group: "bamboo",
   },
@@ -1355,10 +1372,10 @@ export const upgrades: Upgrade[] = [
     id: "autoHarvester",
     name: "Auto-Harvester",
     desc: () => "auto-harvests and replants ready bamboo plots & greenhouse crops (one-shot)",
-    cost: () => ({ salt: 30 }),
-    effect: () => ({ autoHarvesterBought: true }),
+    cost: () => ({ salt: autoHarvesterSaltCost }),
+    effect: () => ({ autoHarvesterBought: true, autoHarvesterEnabled: true }),
     visible: (s) => s.stage >= 1 && s.bambooHarvested >= 5,
-    available: (s) => !s.autoHarvesterBought && s.salt >= 30,
+    available: (s) => !s.autoHarvesterBought && s.salt >= autoHarvesterSaltCost,
     done: (s) => s.autoHarvesterBought,
     group: "bamboo",
   },
@@ -1370,8 +1387,8 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+${SLOTS_PER_GREENHOUSE} crop slots (currently ${s.greenhouses})`,
     cost: (s) => ({
-      water: Math.ceil(40 * Math.pow(1.6, s.greenhouses)),
-      seeds: 5 + s.greenhouses * 6,
+      water: greenhouseWaterCost(s.greenhouses),
+      seeds: greenhouseSeedsCost(s.greenhouses),
     }),
     effect: (s) => ({
       greenhouses: s.greenhouses + 1,
@@ -1386,8 +1403,8 @@ export const upgrades: Upgrade[] = [
     }),
     visible: (s) => s.stage >= 2,
     available: (s) =>
-      s.water >= Math.ceil(40 * Math.pow(1.6, s.greenhouses)) &&
-      s.seeds >= 5 + s.greenhouses * 6,
+      s.water >= greenhouseWaterCost(s.greenhouses) &&
+      s.seeds >= greenhouseSeedsCost(s.greenhouses),
     level: (s) => s.greenhouses,
     group: "greenhouse",
   },
@@ -1396,11 +1413,10 @@ export const upgrades: Upgrade[] = [
     name: "Vents",
     desc: (s) =>
       `cooling: ${fmt(HEAT_DECAY_BASE + s.ventsLevel * VENT_RATE_PER_LEVEL, 2)} → ${fmt(HEAT_DECAY_BASE + (s.ventsLevel + 1) * VENT_RATE_PER_LEVEL, 2)} heat/sec`,
-    cost: (s) => ({ water: Math.ceil(20 * Math.pow(1.7, s.ventsLevel)) }),
+    cost: (s) => ({ water: ventsCost(s.ventsLevel) }),
     effect: (s) => ({ ventsLevel: s.ventsLevel + 1 }),
     visible: (s) => s.stage >= 2,
-    available: (s) =>
-      s.water >= Math.ceil(20 * Math.pow(1.7, s.ventsLevel)),
+    available: (s) => s.water >= ventsCost(s.ventsLevel),
     level: (s) => s.ventsLevel,
     group: "greenhouse",
   },
@@ -1408,57 +1424,70 @@ export const upgrades: Upgrade[] = [
     id: "thermostat",
     name: "Thermostat",
     desc: () => "auto-tunes vents — equivalent of +2 free vent levels (one-shot)",
-    cost: () => ({ water: 250, seeds: 30 }),
+    cost: () => ({ water: thermostatCost.water, seeds: thermostatCost.seeds }),
     effect: () => ({ thermostatBought: true }),
     visible: (s) => s.stage >= 2 && s.ventsLevel >= 3,
     available: (s) =>
-      !s.thermostatBought && s.water >= 250 && s.seeds >= 30,
+      !s.thermostatBought &&
+      s.water >= thermostatCost.water &&
+      s.seeds >= thermostatCost.seeds,
     done: (s) => s.thermostatBought,
     group: "greenhouse",
   },
   {
     id: "cropLotus",
     name: "Cultivar: Lotus",
-    desc: () => "produces water passively while planted (+0.05 u/s per plant)",
-    cost: () => ({ water: 60, seeds: 10 }),
+    desc: () => "produces water passively while planted (+0.04 u/s per plant)",
+    cost: () => ({ water: cropLotusCost.water, seeds: cropLotusCost.seeds }),
     effect: () => ({ lotusUnlocked: true }),
     visible: (s) => s.stage >= 2,
-    available: (s) => !s.lotusUnlocked && s.water >= 60 && s.seeds >= 10,
+    available: (s) =>
+      !s.lotusUnlocked &&
+      s.water >= cropLotusCost.water &&
+      s.seeds >= cropLotusCost.seeds,
     done: (s) => s.lotusUnlocked,
     group: "greenhouse",
   },
   {
     id: "cropReeds",
-    name: "Cultivar: Reeds",
-    desc: () => "produces salt passively while planted (+0.08 salt/s per plant)",
-    cost: () => ({ water: 80, seeds: 15 }),
+    name: "Cultivar: Watercress",
+    desc: () =>
+      "tier-2 passive water plant — +0.10 u/s per plant at 0.10 w/s upkeep",
+    cost: () => ({ water: cropReedsCost.water, seeds: cropReedsCost.seeds }),
     effect: () => ({ reedsUnlocked: true }),
     visible: (s) => s.stage >= 2 && s.lotusUnlocked,
-    available: (s) => !s.reedsUnlocked && s.water >= 80 && s.seeds >= 15,
+    available: (s) =>
+      !s.reedsUnlocked &&
+      s.water >= cropReedsCost.water &&
+      s.seeds >= cropReedsCost.seeds,
     done: (s) => s.reedsUnlocked,
     group: "greenhouse",
   },
   {
     id: "cropMangrove",
     name: "Cultivar: Mangrove",
-    desc: () => "long grow (30s), +0.15 u/s on harvest — for late-stage scale",
-    cost: () => ({ water: 200, seeds: 40 }),
+    desc: () => "long grow, +0.10 u/s on harvest — for late-stage scale",
+    cost: () => ({ water: cropMangroveCost.water, seeds: cropMangroveCost.seeds }),
     effect: () => ({ mangroveUnlocked: true }),
     visible: (s) => s.stage >= 2 && s.lotusUnlocked,
     available: (s) =>
-      !s.mangroveUnlocked && s.water >= 200 && s.seeds >= 40,
+      !s.mangroveUnlocked &&
+      s.water >= cropMangroveCost.water &&
+      s.seeds >= cropMangroveCost.seeds,
     done: (s) => s.mangroveUnlocked,
     group: "greenhouse",
   },
   {
     id: "cropSaguaro",
     name: "Cultivar: Saguaro",
-    desc: () => "low heat output, +4 seeds + 0.025 u/s on harvest",
-    cost: () => ({ water: 120, seeds: 25 }),
+    desc: () => "low heat output, +4 seeds + 0.018 u/s on harvest",
+    cost: () => ({ water: cropSaguaroCost.water, seeds: cropSaguaroCost.seeds }),
     effect: () => ({ saguaroUnlocked: true }),
     visible: (s) => s.stage >= 2 && s.reedsUnlocked,
     available: (s) =>
-      !s.saguaroUnlocked && s.water >= 120 && s.seeds >= 25,
+      !s.saguaroUnlocked &&
+      s.water >= cropSaguaroCost.water &&
+      s.seeds >= cropSaguaroCost.seeds,
     done: (s) => s.saguaroUnlocked,
     group: "greenhouse",
   },
@@ -1466,13 +1495,35 @@ export const upgrades: Upgrade[] = [
     id: "cropPotato",
     name: "Cultivar: Potato",
     desc: () =>
-      "passive food specialist — +0.10 food/s, no other yield (one-shot)",
-    cost: () => ({ water: 200, seeds: 30 }),
+      "passive food specialist — +0.12 food/s, no other yield (one-shot)",
+    cost: () => ({ water: cropPotatoCost.water, seeds: cropPotatoCost.seeds }),
     effect: () => ({ potatoUnlocked: true }),
     visible: (s) => s.stage >= 4,
     available: (s) =>
-      !s.potatoUnlocked && s.water >= 200 && s.seeds >= 30,
+      !s.potatoUnlocked &&
+      s.water >= cropPotatoCost.water &&
+      s.seeds >= cropPotatoCost.seeds,
     done: (s) => s.potatoUnlocked,
+    group: "greenhouse",
+  },
+  {
+    id: "cropBrinePool",
+    name: "Cultivar: Brine Pool",
+    desc: () =>
+      "expensive salt rig — +0.40 salt/s passive at 0.55 w/s upkeep (one-shot)",
+    cost: () => ({
+      water: cropBrinePoolCost.water,
+      seeds: cropBrinePoolCost.seeds,
+      salt: cropBrinePoolCost.salt,
+    }),
+    effect: () => ({ brinePoolUnlocked: true }),
+    visible: (s) => s.stage >= 2 && s.reedsUnlocked,
+    available: (s) =>
+      !s.brinePoolUnlocked &&
+      s.water >= cropBrinePoolCost.water &&
+      s.seeds >= cropBrinePoolCost.seeds &&
+      s.salt >= cropBrinePoolCost.salt,
+    done: (s) => s.brinePoolUnlocked,
     group: "greenhouse",
   },
 
@@ -1483,8 +1534,8 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+1 aqueduct — each amplifies passive flow by ×${(1 + AQUEDUCT_AMP).toFixed(2)} when intact (currently ${s.aqueducts})`,
     cost: (s) => ({
-      water: Math.ceil(150 * Math.pow(1.7, s.aqueducts)),
-      salt: Math.ceil(20 * Math.pow(1.45, s.aqueducts)),
+      water: aqueductWaterCost(s.aqueducts),
+      salt: aqueductSaltCost(s.aqueducts),
     }),
     effect: (s) => ({
       aqueducts: s.aqueducts + 1,
@@ -1492,8 +1543,8 @@ export const upgrades: Upgrade[] = [
     }),
     visible: (s) => s.stage >= 3,
     available: (s) =>
-      s.water >= Math.ceil(150 * Math.pow(1.7, s.aqueducts)) &&
-      s.salt >= Math.ceil(20 * Math.pow(1.45, s.aqueducts)),
+      s.water >= aqueductWaterCost(s.aqueducts) &&
+      s.salt >= aqueductSaltCost(s.aqueducts),
     level: (s) => s.aqueducts,
     group: "aqueduct",
   },
@@ -1503,14 +1554,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `decay: ${fmt(aqueductDecayPerSec(s) * 100, 2)}%/s → ${fmt((AQUEDUCT_DECAY_BASE / (1 + (s.aqueductDurabilityLevel + 1) * 0.5)) * 100, 2)}%/s`,
     cost: (s) => ({
-      water: Math.ceil(80 * Math.pow(1.8, s.aqueductDurabilityLevel)),
+      water: aqueductDurabilityCost(s.aqueductDurabilityLevel),
     }),
     effect: (s) => ({
       aqueductDurabilityLevel: s.aqueductDurabilityLevel + 1,
     }),
     visible: (s) => s.stage >= 3 && s.aqueducts >= 1,
     available: (s) =>
-      s.water >= Math.ceil(80 * Math.pow(1.8, s.aqueductDurabilityLevel)),
+      s.water >= aqueductDurabilityCost(s.aqueductDurabilityLevel),
     level: (s) => s.aqueductDurabilityLevel,
     group: "aqueduct",
   },
@@ -1520,12 +1571,11 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `pressure cap: ${maxPressure(s)} → ${maxPressure(s) + PRESSURE_CAP_PER_LEVEL}`,
     cost: (s) => ({
-      water: Math.ceil(120 * Math.pow(1.7, s.pressureCapLevel)),
+      water: pressureCapCost(s.pressureCapLevel),
     }),
     effect: (s) => ({ pressureCapLevel: s.pressureCapLevel + 1 }),
     visible: (s) => s.stage >= 3,
-    available: (s) =>
-      s.water >= Math.ceil(120 * Math.pow(1.7, s.pressureCapLevel)),
+    available: (s) => s.water >= pressureCapCost(s.pressureCapLevel),
     level: (s) => s.pressureCapLevel,
     group: "aqueduct",
   },
@@ -1534,11 +1584,13 @@ export const upgrades: Upgrade[] = [
     name: "Pressure Valve",
     desc: () =>
       `unlock pressure release; burst yield ×${PRESSURE_BURST_MULT_VALVE} (one-shot)`,
-    cost: () => ({ water: 300, salt: 80 }),
+    cost: () => ({ water: pressureValveCost.water, salt: pressureValveCost.salt }),
     effect: () => ({ pressureValveBought: true }),
     visible: (s) => s.stage >= 3 && s.pressureCapLevel >= 1,
     available: (s) =>
-      !s.pressureValveBought && s.water >= 300 && s.salt >= 80,
+      !s.pressureValveBought &&
+      s.water >= pressureValveCost.water &&
+      s.salt >= pressureValveCost.salt,
     done: (s) => s.pressureValveBought,
     group: "aqueduct",
   },
@@ -1550,14 +1602,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `pop cap: ${popCap(s)} → ${popCap(s) + POP_CAP_PER_LEVEL}`,
     cost: (s) => ({
-      water: Math.ceil(60 * Math.pow(1.5, s.popCapLevel)),
-      seeds: 5 + s.popCapLevel * 4,
+      water: housingWaterCost(s.popCapLevel),
+      seeds: housingSeedsCost(s.popCapLevel),
     }),
     effect: (s) => ({ popCapLevel: s.popCapLevel + 1 }),
     visible: (s) => s.stage >= 4,
     available: (s) =>
-      s.water >= Math.ceil(60 * Math.pow(1.5, s.popCapLevel)) &&
-      s.seeds >= 5 + s.popCapLevel * 4,
+      s.water >= housingWaterCost(s.popCapLevel) &&
+      s.seeds >= housingSeedsCost(s.popCapLevel),
     level: (s) => s.popCapLevel,
     group: "settlement",
   },
@@ -1567,14 +1619,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `food cap: ${foodCap(s)} → ${foodCap(s) + FOOD_CAP_PER_GRANARY}`,
     cost: (s) => ({
-      water: Math.ceil(50 * Math.pow(1.6, s.granaryLevel)),
-      seeds: 8 + s.granaryLevel * 5,
+      water: granaryWaterCost(s.granaryLevel),
+      seeds: granarySeedsCost(s.granaryLevel),
     }),
     effect: (s) => ({ granaryLevel: s.granaryLevel + 1 }),
     visible: (s) => s.stage >= 4,
     available: (s) =>
-      s.water >= Math.ceil(50 * Math.pow(1.6, s.granaryLevel)) &&
-      s.seeds >= 8 + s.granaryLevel * 5,
+      s.water >= granaryWaterCost(s.granaryLevel) &&
+      s.seeds >= granarySeedsCost(s.granaryLevel),
     level: (s) => s.granaryLevel,
     group: "settlement",
   },
@@ -1582,11 +1634,13 @@ export const upgrades: Upgrade[] = [
     id: "school",
     name: "School",
     desc: () => `labor productivity ×${SCHOOL_LABOR_MULT} (one-shot)`,
-    cost: () => ({ water: 400, labor: 200 }),
+    cost: () => ({ water: schoolCost.water, labor: schoolCost.labor }),
     effect: () => ({ schoolBought: true }),
     visible: (s) => s.stage >= 4 && s.population >= 5,
     available: (s) =>
-      !s.schoolBought && s.water >= 400 && s.labor >= 200,
+      !s.schoolBought &&
+      s.water >= schoolCost.water &&
+      s.labor >= schoolCost.labor,
     done: (s) => s.schoolBought,
     group: "settlement",
   },
@@ -1598,14 +1652,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+1 boiler — converts ${BOILER_WATER_PER_SEC} water/s + ${BOILER_COAL_PER_SEC} coal/s into ${BOILER_STEAM_OUT_PER_SEC} steam/s (currently ${s.boilers})`,
     cost: (s) => ({
-      water: Math.ceil(400 * Math.pow(1.7, s.boilers)),
-      labor: Math.ceil(100 * Math.pow(1.55, s.boilers)),
+      water: boilerWaterCost(s.boilers),
+      labor: boilerLaborCost(s.boilers),
     }),
     effect: (s) => ({ boilers: s.boilers + 1 }),
     visible: (s) => s.stage >= 5,
     available: (s) =>
-      s.water >= Math.ceil(400 * Math.pow(1.7, s.boilers)) &&
-      s.labor >= Math.ceil(100 * Math.pow(1.55, s.boilers)),
+      s.water >= boilerWaterCost(s.boilers) &&
+      s.labor >= boilerLaborCost(s.boilers),
     level: (s) => s.boilers,
     group: "industry",
   },
@@ -1615,14 +1669,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `production ×${turbineMultiplier(s).toFixed(2)} → ×${(turbineMultiplier(s) + TURBINE_MULT_PER).toFixed(2)} (currently ${s.turbines})`,
     cost: (s) => ({
-      steam: Math.ceil(20 * Math.pow(1.6, s.turbines)),
-      labor: Math.ceil(100 * Math.pow(1.5, s.turbines)),
+      steam: turbineSteamCost(s.turbines),
+      labor: turbineLaborCost(s.turbines),
     }),
     effect: (s) => ({ turbines: s.turbines + 1 }),
     visible: (s) => s.stage >= 5 && s.boilers >= 1,
     available: (s) =>
-      s.steam >= Math.ceil(20 * Math.pow(1.6, s.turbines)) &&
-      s.labor >= Math.ceil(100 * Math.pow(1.5, s.turbines)),
+      s.steam >= turbineSteamCost(s.turbines) &&
+      s.labor >= turbineLaborCost(s.turbines),
     level: (s) => s.turbines,
     group: "industry",
   },
@@ -1631,11 +1685,13 @@ export const upgrades: Upgrade[] = [
     name: "Electrolysis Retrofit",
     desc: () =>
       "boilers no longer require coal; halts pollution growth (one-shot)",
-    cost: () => ({ steam: 100, labor: 500 }),
+    cost: () => ({ steam: electrolysisCost.steam, labor: electrolysisCost.labor }),
     effect: () => ({ electrolysisBought: true }),
     visible: (s) => s.stage >= 5 && s.boilers >= 2,
     available: (s) =>
-      !s.electrolysisBought && s.steam >= 100 && s.labor >= 500,
+      !s.electrolysisBought &&
+      s.steam >= electrolysisCost.steam &&
+      s.labor >= electrolysisCost.labor,
     done: (s) => s.electrolysisBought,
     group: "industry",
   },
@@ -1647,14 +1703,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `drill speed: ${fmt(drillSpeed(s), 2)} → ${fmt(drillSpeed(s) + DRILL_SPEED_PER_LEVEL, 2)} m/s`,
     cost: (s) => ({
-      water: Math.ceil(400 * Math.pow(1.7, s.drillSpeedLevel)),
-      minerals: Math.ceil(5 + s.drillSpeedLevel * 4),
+      water: drillBitWaterCost(s.drillSpeedLevel),
+      minerals: drillBitMineralsCost(s.drillSpeedLevel),
     }),
     effect: (s) => ({ drillSpeedLevel: s.drillSpeedLevel + 1 }),
     visible: (s) => s.stage >= 6,
     available: (s) =>
-      s.water >= Math.ceil(400 * Math.pow(1.7, s.drillSpeedLevel)) &&
-      s.minerals >= 5 + s.drillSpeedLevel * 4,
+      s.water >= drillBitWaterCost(s.drillSpeedLevel) &&
+      s.minerals >= drillBitMineralsCost(s.drillSpeedLevel),
     level: (s) => s.drillSpeedLevel,
     group: "aquifer",
   },
@@ -1664,14 +1720,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `cave-in chance ÷${(1 + s.supportBeamsLevel * 1.5).toFixed(1)} → ÷${(1 + (s.supportBeamsLevel + 1) * 1.5).toFixed(1)}`,
     cost: (s) => ({
-      water: Math.ceil(300 * Math.pow(1.6, s.supportBeamsLevel)),
-      minerals: Math.ceil(8 + s.supportBeamsLevel * 5),
+      water: supportBeamsWaterCost(s.supportBeamsLevel),
+      minerals: supportBeamsMineralsCost(s.supportBeamsLevel),
     }),
     effect: (s) => ({ supportBeamsLevel: s.supportBeamsLevel + 1 }),
     visible: (s) => s.stage >= 6 && s.depth >= 100,
     available: (s) =>
-      s.water >= Math.ceil(300 * Math.pow(1.6, s.supportBeamsLevel)) &&
-      s.minerals >= 8 + s.supportBeamsLevel * 5,
+      s.water >= supportBeamsWaterCost(s.supportBeamsLevel) &&
+      s.minerals >= supportBeamsMineralsCost(s.supportBeamsLevel),
     level: (s) => s.supportBeamsLevel,
     group: "aquifer",
   },
@@ -1679,11 +1735,13 @@ export const upgrades: Upgrade[] = [
     id: "geothermalTap",
     name: "Geothermal Tap",
     desc: () => `+${GEOTHERMAL_BONUS * 100}% to all rates (one-shot)`,
-    cost: () => ({ minerals: 200, steam: 200 }),
+    cost: () => ({ minerals: geothermalTapCost.minerals, steam: geothermalTapCost.steam }),
     effect: () => ({ geothermalTapBought: true }),
     visible: (s) => s.stage >= 6 && s.depth >= MAGMA_DEPTH,
     available: (s) =>
-      !s.geothermalTapBought && s.minerals >= 200 && s.steam >= 200,
+      !s.geothermalTapBought &&
+      s.minerals >= geothermalTapCost.minerals &&
+      s.steam >= geothermalTapCost.steam,
     done: (s) => s.geothermalTapBought,
     group: "aquifer",
   },
@@ -1695,14 +1753,14 @@ export const upgrades: Upgrade[] = [
     desc: (s) =>
       `+1 station — converts ${SEEDER_WATER_PER_SEC} water/s + ${SEEDER_STEAM_PER_SEC} steam/s into ${SEEDER_VAPOR_PER_SEC} vapor/s (currently ${s.cloudSeeders})`,
     cost: (s) => ({
-      water: Math.ceil(2000 * Math.pow(1.75, s.cloudSeeders)),
-      minerals: Math.ceil(20 + s.cloudSeeders * 12),
+      water: cloudSeederWaterCost(s.cloudSeeders),
+      minerals: cloudSeederMineralsCost(s.cloudSeeders),
     }),
     effect: (s) => ({ cloudSeeders: s.cloudSeeders + 1 }),
     visible: (s) => s.stage >= 7,
     available: (s) =>
-      s.water >= Math.ceil(2000 * Math.pow(1.75, s.cloudSeeders)) &&
-      s.minerals >= 20 + s.cloudSeeders * 12,
+      s.water >= cloudSeederWaterCost(s.cloudSeeders) &&
+      s.minerals >= cloudSeederMineralsCost(s.cloudSeeders),
     level: (s) => s.cloudSeeders,
     group: "atmosphere",
   },
@@ -1710,11 +1768,16 @@ export const upgrades: Upgrade[] = [
     id: "lightningCapacitor",
     name: "Lightning Capacitor",
     desc: () => `lightning gain ×${LIGHTNING_CAP_MULT} (one-shot)`,
-    cost: () => ({ minerals: 100, steam: 200 }),
+    cost: () => ({
+      minerals: lightningCapacitorCost.minerals,
+      steam: lightningCapacitorCost.steam,
+    }),
     effect: () => ({ lightningCapacitorBought: true }),
     visible: (s) => s.stage >= 7 && s.clouds >= 5,
     available: (s) =>
-      !s.lightningCapacitorBought && s.minerals >= 100 && s.steam >= 200,
+      !s.lightningCapacitorBought &&
+      s.minerals >= lightningCapacitorCost.minerals &&
+      s.steam >= lightningCapacitorCost.steam,
     done: (s) => s.lightningCapacitorBought,
     group: "atmosphere",
   },
@@ -1722,14 +1785,18 @@ export const upgrades: Upgrade[] = [
     id: "weatherSatellite",
     name: "Weather Satellite",
     desc: () => "stabilizes weather; aqueducts decay 50% slower (one-shot)",
-    cost: () => ({ minerals: 250, steam: 300, lightning: 5 }),
+    cost: () => ({
+      minerals: weatherSatelliteCost.minerals,
+      steam: weatherSatelliteCost.steam,
+      lightning: weatherSatelliteCost.lightning,
+    }),
     effect: () => ({ weatherSatelliteBought: true }),
     visible: (s) => s.stage >= 7 && s.clouds >= 10,
     available: (s) =>
       !s.weatherSatelliteBought &&
-      s.minerals >= 250 &&
-      s.steam >= 300 &&
-      s.lightning >= 5,
+      s.minerals >= weatherSatelliteCost.minerals &&
+      s.steam >= weatherSatelliteCost.steam &&
+      s.lightning >= weatherSatelliteCost.lightning,
     done: (s) => s.weatherSatelliteBought,
     group: "atmosphere",
   },
@@ -2031,7 +2098,7 @@ export const upgrades: Upgrade[] = [
     id: "stage2",
     name: "Construct Greenhouse → Stage II",
     desc: () => "transplant bamboo plots into climate-controlled greenhouse slots",
-    cost: () => ({ water: 300, seeds: 60 }),
+    cost: () => ({ water: MILESTONE.stage2.waterCost, seeds: MILESTONE.stage2.seedsCost }),
     effect: (s) => {
       // Carry over every planted bamboo plot as a greenhouse bamboo slot
       // (preserve growth progress and ready flag). Empty plots are discarded.
@@ -2055,9 +2122,13 @@ export const upgrades: Upgrade[] = [
       };
     },
     visible: (s) =>
-      s.stage === 1 && s.bambooHarvested >= 50 && s.plots.length >= 3,
+      s.stage === 1 &&
+      s.bambooHarvested >= MILESTONE.stage2.bambooHarvestedReq &&
+      s.plots.length >= MILESTONE.stage2.plotsReq,
     available: (s) =>
-      s.stage === 1 && s.water >= 300 && s.seeds >= 60,
+      s.stage === 1 &&
+      s.water >= MILESTONE.stage2.waterCost &&
+      s.seeds >= MILESTONE.stage2.seedsCost,
     done: (s) => s.stage2Unlocked,
     group: "milestone",
   },
@@ -2066,14 +2137,19 @@ export const upgrades: Upgrade[] = [
     name: "Lay Aqueducts → Stage III",
     desc: () =>
       "scale operations from greenhouse plots to a flowing infrastructure network",
-    cost: () => ({ water: 3000, salt: 250 }),
+    cost: () => ({ water: MILESTONE.stage3.waterCost, salt: MILESTONE.stage3.saltCost }),
     effect: () => ({
       stage: 3 as Stage,
       stage3Unlocked: true,
     }),
     visible: (s) =>
-      s.stage === 2 && s.greenhouses >= 3 && effectiveFaucet(s) >= 4.0,
-    available: (s) => s.stage === 2 && s.water >= 3000 && s.salt >= 250,
+      s.stage === 2 &&
+      s.greenhouses >= MILESTONE.stage3.greenhousesReq &&
+      effectiveFaucet(s) >= MILESTONE.stage3.faucetReq,
+    available: (s) =>
+      s.stage === 2 &&
+      s.water >= MILESTONE.stage3.waterCost &&
+      s.salt >= MILESTONE.stage3.saltCost,
     done: (s) => s.stage3Unlocked,
     group: "milestone",
   },
@@ -2082,7 +2158,7 @@ export const upgrades: Upgrade[] = [
     name: "Found Settlement → Stage IV",
     desc: () =>
       "people arrive, drink your water, and offer their labor in return",
-    cost: () => ({ water: 15000, salt: 800 }),
+    cost: () => ({ water: MILESTONE.stage4.waterCost, salt: MILESTONE.stage4.saltCost }),
     effect: () => ({
       stage: 4 as Stage,
       stage4Unlocked: true,
@@ -2090,8 +2166,13 @@ export const upgrades: Upgrade[] = [
       food: BASE_FOOD_CAP / 2,
     }),
     visible: (s) =>
-      s.stage === 3 && s.aqueducts >= 8 && effectiveFaucet(s) >= 12.0,
-    available: (s) => s.stage === 3 && s.water >= 15000 && s.salt >= 800,
+      s.stage === 3 &&
+      s.aqueducts >= MILESTONE.stage4.aqueductsReq &&
+      effectiveFaucet(s) >= MILESTONE.stage4.faucetReq,
+    available: (s) =>
+      s.stage === 3 &&
+      s.water >= MILESTONE.stage4.waterCost &&
+      s.salt >= MILESTONE.stage4.saltCost,
     done: (s) => s.stage4Unlocked,
     group: "milestone",
   },
@@ -2100,16 +2181,20 @@ export const upgrades: Upgrade[] = [
     name: "Light the Boilers → Stage V",
     desc: () =>
       "the steam age — water becomes power, coal becomes pollution",
-    cost: () => ({ water: 50000, labor: 5000 }),
+    cost: () => ({ water: MILESTONE.stage5.waterCost, labor: MILESTONE.stage5.laborCost }),
     effect: () => ({
       stage: 5 as Stage,
       stage5Unlocked: true,
       coal: 5, // starter ration
     }),
     visible: (s) =>
-      s.stage === 4 && s.population >= 60 && s.labor >= 2000,
+      s.stage === 4 &&
+      s.population >= MILESTONE.stage5.populationReq &&
+      s.labor >= MILESTONE.stage5.laborReq,
     available: (s) =>
-      s.stage === 4 && s.water >= 50000 && s.labor >= 5000,
+      s.stage === 4 &&
+      s.water >= MILESTONE.stage5.waterCost &&
+      s.labor >= MILESTONE.stage5.laborCost,
     done: (s) => s.stage5Unlocked,
     group: "milestone",
   },
@@ -2118,16 +2203,20 @@ export const upgrades: Upgrade[] = [
     name: "Sink Borehole → Stage VI",
     desc: () =>
       "drill into the earth and tap the aquifer's vast water reserves",
-    cost: () => ({ water: 250000, steam: 1500 }),
+    cost: () => ({ water: MILESTONE.stage6.waterCost, steam: MILESTONE.stage6.steamCost }),
     effect: () => ({
       stage: 6 as Stage,
       stage6Unlocked: true,
       drilling: true, // start drilling immediately
     }),
     visible: (s) =>
-      s.stage === 5 && s.boilers >= 8 && s.steam >= 800,
+      s.stage === 5 &&
+      s.boilers >= MILESTONE.stage6.boilersReq &&
+      s.steam >= MILESTONE.stage6.steamReq,
     available: (s) =>
-      s.stage === 5 && s.water >= 250000 && s.steam >= 1500,
+      s.stage === 5 &&
+      s.water >= MILESTONE.stage6.waterCost &&
+      s.steam >= MILESTONE.stage6.steamCost,
     done: (s) => s.stage6Unlocked,
     group: "milestone",
   },
@@ -2136,16 +2225,23 @@ export const upgrades: Upgrade[] = [
     name: "Pierce the Sky → Stage VII",
     desc: () =>
       "pump water upward and seize control of the weather above your works",
-    cost: () => ({ minerals: 800, steam: 5000 }),
+    cost: () => ({
+      minerals: MILESTONE.stage7.mineralsCost,
+      steam: MILESTONE.stage7.steamCost,
+    }),
     effect: () => ({
       stage: 7 as Stage,
       stage7Unlocked: true,
       cloudSeeders: 1,
     }),
     visible: (s) =>
-      s.stage === 6 && s.depth >= AQUIFER_DEPTH + 500 && s.minerals >= 400,
+      s.stage === 6 &&
+      s.depth >= MILESTONE.stage7.depthReq &&
+      s.minerals >= MILESTONE.stage7.mineralsReq,
     available: (s) =>
-      s.stage === 6 && s.minerals >= 800 && s.steam >= 5000,
+      s.stage === 6 &&
+      s.minerals >= MILESTONE.stage7.mineralsCost &&
+      s.steam >= MILESTONE.stage7.steamCost,
     done: (s) => s.stage7Unlocked,
     group: "milestone",
   },
@@ -2154,15 +2250,22 @@ export const upgrades: Upgrade[] = [
     name: "Inhabit the Hydrosphere → Stage VIII",
     desc: () =>
       "ascend beyond infrastructure — become the planetary water cycle",
-    cost: () => ({ minerals: 8000, lightning: 250 }),
+    cost: () => ({
+      minerals: MILESTONE.stage8.mineralsCost,
+      lightning: MILESTONE.stage8.lightningCost,
+    }),
     effect: () => ({
       stage: 8 as Stage,
       stage8Unlocked: true,
     }),
     visible: (s) =>
-      s.stage === 7 && s.clouds >= 80 && s.lightning >= 200,
+      s.stage === 7 &&
+      s.clouds >= MILESTONE.stage8.cloudsReq &&
+      s.lightning >= MILESTONE.stage8.lightningReq,
     available: (s) =>
-      s.stage === 7 && s.minerals >= 8000 && s.lightning >= 250,
+      s.stage === 7 &&
+      s.minerals >= MILESTONE.stage8.mineralsCost &&
+      s.lightning >= MILESTONE.stage8.lightningCost,
     done: (s) => s.stage8Unlocked,
     group: "milestone",
   },

@@ -70,12 +70,14 @@ export function Wheel({
   onRevolution,
   spinValue,
   rate,
+  multiplier,
 }: {
   baselineSpeed: number; // deg/sec floor, from auto-spinner
   maxSpeed: number; // deg/sec ceiling, from wheel bearings
   onRevolution: () => void; // fires once per full rotation
   spinValue: number;
   rate: number;
+  multiplier?: number; // pressure-regulator multiplier on passive flow (×N.NN)
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const speedRef = useRef(baselineSpeed);
@@ -208,6 +210,11 @@ export function Wheel({
         <span className="readout-steel text-sm tabular-nums">
           +{fmt(rate, 2)} u/s
         </span>
+        {multiplier !== undefined && multiplier > 1 && (
+          <span className="readout-dim text-[10px] tabular-nums tracking-wider">
+            ×{multiplier.toFixed(2)}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -10,8 +10,29 @@ Package manager is **Bun** (see `bun.lock`).
 - `bun run build` — `tsc -b` (project references) then `vite build`
 - `bun run lint` — ESLint over the repo (flat config in `eslint.config.js`)
 - `bun run preview` — preview the production build
+- `bun run etc/scripts/run-simulation.ts` — headless balance simulator (see below)
 
 There is no test runner configured.
+
+## Always run the simulator after gameplay/balance changes
+
+Whenever you touch anything that affects pacing — `src/balance.ts`, the
+`upgrades` array, milestone gates, the `tick` reducer case, crop yields,
+auto-harvest behavior, cost formulas, or any rate/threshold constant — run
+the simulator before declaring the change done:
+
+```
+bun run etc/scripts/run-simulation.ts
+```
+
+The simulator (`src/simulation/simulator.ts`) drives the same reducer the UI
+uses with an "engaged player" policy and prints a target-vs-actual table for
+all 9 phase transitions. It exits 0 when every phase lands within ±20% of
+its target window in `PHASE_TARGETS`, 1 otherwise. If a change knocks any
+phase out of tolerance, iterate on `balance.ts` (or the offending mechanic)
+until the simulator passes again, and update `SIMULATION_RESULTS.md` with
+the new numbers. Don't ship a balance change without a passing simulator
+run — the targets exist precisely so we don't ship unverified pacing.
 
 ## Architecture
 

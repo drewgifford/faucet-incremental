@@ -3,6 +3,7 @@ import {
   autoSpinBaselineDegPerSec,
   autoSpinRate,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   maxSpinSpeed,
   spinGain,
@@ -30,6 +31,7 @@ export function Stage0({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>

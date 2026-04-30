@@ -5,6 +5,7 @@ import {
   CROPS,
   cropGrowTime,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   HEAT_GROWTH_THRESHOLD,
   HEAT_WITHER_THRESHOLD,
@@ -35,6 +36,7 @@ export function Stage2({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>
@@ -153,6 +155,18 @@ function GreenhousePanel({ state, dispatch }: Props) {
     <Panel title={`Greenhouse — ${state.ghSlots.length} slots`}>
       <div className="flex flex-col gap-3">
         <HeatGauge heat={state.heat} />
+
+        {state.autoHarvesterBought && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-dim">auto-harvester</span>
+            <button
+              onClick={() => dispatch({ type: "toggleAutoHarvester" })}
+              className={`btn text-[10px] ${state.autoHarvesterEnabled ? "btn-emerald" : ""}`}
+            >
+              {state.autoHarvesterEnabled ? "ON" : "OFF"}
+            </button>
+          </div>
+        )}
 
         {/* Crop picker */}
         <div className="flex flex-wrap items-center gap-1.5">

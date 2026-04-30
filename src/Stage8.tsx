@@ -3,6 +3,7 @@ import {
   autoSpinBaselineDegPerSec,
   cycleMultiplier,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   HYDROENTROPY_RATE,
   HYDROENTROPY_TARGET,
@@ -34,6 +35,7 @@ export function Stage8({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>

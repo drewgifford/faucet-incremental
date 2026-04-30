@@ -6,6 +6,7 @@ import {
   caveInProbPerSec,
   drillSpeed,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   geothermalMultiplier,
   layerName,
@@ -38,6 +39,7 @@ export function Stage6({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>

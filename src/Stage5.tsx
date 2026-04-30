@@ -6,6 +6,7 @@ import {
   BOILER_WATER_PER_SEC,
   COAL_TRADE_WATER,
   effectiveFaucet,
+  faucetMultiplier,
   fmt,
   maxSpinSpeed,
   POLLUTION_MAX,
@@ -37,6 +38,7 @@ export function Stage5({ state, dispatch }: Props) {
               onRevolution={() => dispatch({ type: "spin" })}
               spinValue={spinGain(state)}
               rate={effectiveFaucet(state)}
+              multiplier={faucetMultiplier(state)}
             />
           </div>
         </Panel>
